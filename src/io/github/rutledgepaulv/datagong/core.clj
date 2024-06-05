@@ -8,9 +8,15 @@
 
 (def indexes
   {:eav {:order [:e :a :v]}
+   :eva {:order [:e :v :a]}
    :aev {:order [:a :e :v]}
    :ave {:order [:a :v :e]}
    :vae {:order [:v :a :e]}
+   :ae  {:order [:a :e]}
+   :av  {:order [:a :v]}
+   :ev  {:order [:e :v]}
+   :ve  {:order [:v :e]}
+   :va  {:order [:v :a]}
    :e   {:order [:e]}
    :a   {:order [:a]}
    :v   {:order [:v]}})
@@ -45,35 +51,33 @@
    {:in #{} :out #{:e}}               {:plan {:index :e :operation :scan}}
    {:in #{} :out #{:v}}               {:plan {:index :v :operation :scan}}
 
-   {:in #{} :out #{:a :e}}            {:plan {:index :aev :operation :scan}}
-   {:in #{} :out #{:a :v}}            {:plan {:index :vae :operation :scan}}
-   {:in #{} :out #{:e :v}}            {:plan {:index :eav :operation :scan}}
+   {:in #{} :out #{:a :e}}            {:plan {:index :ae :operation :scan}}
+   {:in #{} :out #{:a :v}}            {:plan {:index :av :operation :scan}}
+   {:in #{} :out #{:e :v}}            {:plan {:index :ev :operation :scan}}
    {:in #{} :out #{:a :e :v}}         {:plan {:index :eav :operation :scan}}
 
    {:in #{:e} :out #{:e}}             {:plan {:index :e :operation :range :start [:e] :stop [:e]}}
    {:in #{:a} :out #{:a}}             {:plan {:index :a :operation :range :start [:a] :stop [:a]}}
    {:in #{:v} :out #{:v}}             {:plan {:index :v :operation :range :start [:v] :stop [:v]}}
 
-   {:in #{:e} :out #{:a :e}}          {:plan {:index :eav :operation :range :start [:e] :stop [:e]}}
-   {:in #{:e} :out #{:e :v}}          {:plan {:index :eav :operation :range :start [:e] :stop [:e]}}
-   {:in #{:e} :out #{:a :e :v}}       {:plan {:index :eav :operation :range :start [:e] :stop [:e]}}
+   {:in #{:e} :out #{:e :a}}          {:plan {:index :ea :operation :range :start [:e] :stop [:e]}}
+   {:in #{:e} :out #{:e :v}}          {:plan {:index :ev :operation :range :start [:e] :stop [:e]}}
+   {:in #{:a} :out #{:a :e}}          {:plan {:index :ae :operation :range :start [:a] :stop [:a]}}
+   {:in #{:a} :out #{:a :v}}          {:plan {:index :av :operation :range :start [:a] :stop [:a]}}
+   {:in #{:v} :out #{:a :v}}          {:plan {:index :va :operation :range :start [:v] :stop [:v]}}
+   {:in #{:v} :out #{:e :v}}          {:plan {:index :ve :operation :range :start [:v] :stop [:v]}}
 
-   {:in #{:a} :out #{:a :e}}          {:plan {:index :aev :operation :range :start [:a] :stop [:a]}}
-   {:in #{:a} :out #{:a :v}}          {:plan {:index :ave :operation :range :start [:a] :stop [:a]}}
+   {:in #{:e} :out #{:e :a :v}}       {:plan {:index :eav :operation :range :start [:e] :stop [:e]}}
    {:in #{:a} :out #{:a :e :v}}       {:plan {:index :aev :operation :range :start [:a] :stop [:a]}}
+   {:in #{:v} :out #{:a :e :v}}       {:plan {:index :vae :operation :range :start [:v] :stop [:v]}}
 
-   {:in #{:v} :out #{:a :v}}          {:plan {:index :vaet :operation :range :start [:v] :stop [:v]}}
-   {:in #{:v} :out #{:e :v}}          {:plan {:index :vaet :operation :range :start [:v] :stop [:v]}}
-   {:in #{:v} :out #{:a :e :v}}       {:plan {:index :vaet :operation :range :start [:v] :stop [:v]}}
+   {:in #{:e :v} :out #{:v :e}}       {:plan {:index :ev :operation :range :start [:e :v] :stop [:e :v]}}
+   {:in #{:a :e} :out #{:e :a}}       {:plan {:index :ea :operation :range :start [:e :a] :stop [:e :a]}}
+   {:in #{:a :v} :out #{:v :a}}       {:plan {:index :av :operation :range :start [:a :v] :stop [:a :v]}}
 
-   {:in #{:e :v} :out #{:v :e}}       {:plan {:index :eav :operation :range :start [:e] :stop [:e]}}
-   {:in #{:e :v} :out #{:v :e :a}}    {:plan {:index :eav :operation :range :start [:e] :stop [:e]}}
-
-   {:in #{:a :e} :out #{:e :a}}       {:plan {:index :eav :operation :range :start [:a :e] :stop [:a :e]}}
-   {:in #{:a :e} :out #{:v :e :a}}    {:plan {:index :eav :operation :range :start [:a :e] :stop [:a :e]}}
-
-   {:in #{:a :v} :out #{:v :a}}       {:plan {:index :vae :operation :range :start [:v :a] :stop [:v :a]}}
-   {:in #{:a :v} :out #{:v :e :a}}    {:plan {:index :vae :operation :range :start [:v :a] :stop [:v :a]}}
+   {:in #{:e :v} :out #{:v :e :a}}    {:plan {:index :eva :operation :range :start [:e :v] :stop [:e :v]}}
+   {:in #{:a :e} :out #{:v :e :a}}    {:plan {:index :eav :operation :range :start [:e :a] :stop [:e :a]}}
+   {:in #{:a :v} :out #{:v :e :a}}    {:plan {:index :ave :operation :range :start [:a :v] :stop [:a :v]}}
 
    {:in #{:a :e :v} :out #{:v :e :a}} {:plan {:index :eav :operation :range :start [:e :a :v] :stop [:e :a :v]}}})
 
