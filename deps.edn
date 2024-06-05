@@ -1,5 +1,6 @@
 {:paths ["src" "resources"]
- :deps  {persistent-sorted-set/persistent-sorted-set {:mvn/version "0.3.0"}}
+ :deps  {persistent-sorted-set/persistent-sorted-set {:mvn/version "0.3.0"}
+         com.google.guava/guava                      {:mvn/version "33.2.1-jre"}}
  :aliases
  {:test {:extra-paths ["test"]}
   :dev  {:extra-deps {org.clojure/math.combinatorics {:mvn/version "0.3.0"}}}}}
