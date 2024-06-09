@@ -1,100 +1,81 @@
 (ns io.github.rutledgepaulv.datagong.core
   (:require [clojure.set :as sets]
+            [clojure.string :as str]
             [me.tonsky.persistent-sorted-set :as pss]
-            [io.github.rutledgepaulv.datagong.algebra :as algebra]))
+            [io.github.rutledgepaulv.datagong.algebra :as algebra]
+            [clojure.math.combinatorics :as combos]))
+
+(def components
+  {:e {:name "entity"}
+   :a {:name "attribute"}
+   :v {:name "value"}})
+
+(defn powerset
+  ([s] (powerset s [#{}]))
+  ([s acc]
+   (if (empty? s)
+     acc
+     (recur (rest s)
+            (into acc (map #(conj % (first s)) acc))))))
+
+(defn permuted-powerset [xs]
+  (for [i (range (count xs))]
+    (combos/permuted-combinations xs (inc i))))
 
 (def indexes
-  {:eav {:order [:e :a :v]}
-   :eva {:order [:e :v :a]}
-   :aev {:order [:a :e :v]}
-   :ave {:order [:a :v :e]}
-   :vae {:order [:v :a :e]}
-   :ae  {:order [:a :e]}
-   :av  {:order [:a :v]}
-   :ev  {:order [:e :v]}
-   :ve  {:order [:v :e]}
-   :va  {:order [:v :a]}
-   :e   {:order [:e]}
-   :a   {:order [:a]}
-   :v   {:order [:v]}})
+  (->> (permuted-powerset (keys components))
+       (mapcat identity)
+       (reduce
+         (fn [agg order]
+           (let [index-name (keyword (str/join (map name order)))]
+             (assoc agg index-name {:order (vec order) :name index-name})))
+         (sorted-map))))
 
 (defn safe-value [x]
   [(str (class x)) (hash x)])
 
-(defn safe-compare [a b]
+(defn safe-compare [order a b]
   (reduce
-    (fn [result [a' b']]
+    (fn [result k]
       (let [result'
             (try
-              (compare a' b')
+              (compare (get a k) (get b k))
               (catch Exception e
-                (compare (safe-value a') (safe-value b'))))]
+                (compare (safe-value (get a k)) (safe-value (get b k)))))]
         (if (zero? result')
           result
           (reduced result'))))
     0
-    (map vector a b)))
+    order))
 
-(defn create-comparator [order]
-  (fn [a b] (safe-compare (mapv a order) (mapv b order))))
-
-(defn new-db
-  ([] (new-db create-comparator))
-  ([create-comparator]
-   (persistent!
-     (reduce-kv
-       (fn [agg k {:keys [order]}]
-         (assoc! agg k (pss/sorted-set-by (create-comparator order))))
-       (transient {})
-       indexes))))
+(defn new-db []
+  (persistent!
+    (reduce-kv
+      (fn [agg k {:keys [order]}]
+        (assoc! agg k (pss/sorted-set-by (partial safe-compare order))))
+      (transient {})
+      indexes)))
 
 (defn add-datom [db datom]
   (persistent!
     (reduce-kv
       (fn [agg k v]
         (let [{:keys [order]} (get indexes k)]
-          (assoc! agg k (conj v (select-keys (zipmap [:e :a :v] datom) order)))))
+          (assoc! agg k (conj v (select-keys (zipmap (keys components) datom) order)))))
       (transient {})
       db)))
 
 (def index-selection
-  {{:in #{} :out #{:a}}               {:plan {:index :a :operation :scan}}
-   {:in #{} :out #{:e}}               {:plan {:index :e :operation :scan}}
-   {:in #{} :out #{:v}}               {:plan {:index :v :operation :scan}}
-
-   {:in #{} :out #{:a :e}}            {:plan {:index :ae :operation :scan}}
-   {:in #{} :out #{:a :v}}            {:plan {:index :av :operation :scan}}
-   {:in #{} :out #{:e :v}}            {:plan {:index :ev :operation :scan}}
-   {:in #{} :out #{:a :e :v}}         {:plan {:index :eav :operation :scan}}
-
-   {:in #{:e} :out #{:e}}             {:plan {:index :e :operation :range :start [:e] :stop [:e]}}
-   {:in #{:a} :out #{:a}}             {:plan {:index :a :operation :range :start [:a] :stop [:a]}}
-   {:in #{:v} :out #{:v}}             {:plan {:index :v :operation :range :start [:v] :stop [:v]}}
-
-   {:in #{:e} :out #{:e :a}}          {:plan {:index :ea :operation :range :start [:e] :stop [:e]}}
-   {:in #{:e} :out #{:e :v}}          {:plan {:index :ev :operation :range :start [:e] :stop [:e]}}
-   {:in #{:a} :out #{:a :e}}          {:plan {:index :ae :operation :range :start [:a] :stop [:a]}}
-   {:in #{:a} :out #{:a :v}}          {:plan {:index :av :operation :range :start [:a] :stop [:a]}}
-   {:in #{:v} :out #{:a :v}}          {:plan {:index :va :operation :range :start [:v] :stop [:v]}}
-   {:in #{:v} :out #{:e :v}}          {:plan {:index :ve :operation :range :start [:v] :stop [:v]}}
-
-   {:in #{:e} :out #{:e :a :v}}       {:plan {:index :eav :operation :range :start [:e] :stop [:e]}}
-   {:in #{:a} :out #{:a :e :v}}       {:plan {:index :aev :operation :range :start [:a] :stop [:a]}}
-   {:in #{:v} :out #{:a :e :v}}       {:plan {:index :vae :operation :range :start [:v] :stop [:v]}}
-
-   {:in #{:e :v} :out #{:v :e}}       {:plan {:index :ev :operation :range :start [:e :v] :stop [:e :v]}}
-   {:in #{:a :e} :out #{:e :a}}       {:plan {:index :ea :operation :range :start [:e :a] :stop [:e :a]}}
-   {:in #{:a :v} :out #{:e}}          {:plan {:index :ave :operation :range :start [:a :v] :stop [:a :v]}}
-   {:in #{:a :v} :out #{:v :a}}       {:plan {:index :av :operation :range :start [:a :v] :stop [:a :v]}}
-
-   {:in #{:e :v} :out #{:v :e :a}}    {:plan {:index :eva :operation :range :start [:e :v] :stop [:e :v]}}
-   {:in #{:a :e} :out #{:v :e :a}}    {:plan {:index :eav :operation :range :start [:e :a] :stop [:e :a]}}
-
-   {:in #{:a :e} :out #{:v :e}}       {:plan {:index :eav :operation :range :start [:e :a] :stop [:e :a]}}
-
-   {:in #{:a :v} :out #{:v :e :a}}    {:plan {:index :ave :operation :range :start [:a :v] :stop [:a :v]}}
-
-   {:in #{:a :e :v} :out #{:v :e :a}} {:plan {:index :eav :operation :range :start [:e :a :v] :stop [:e :a :v]}}})
+  (into {} (for [in  (powerset (set (keys components)))
+                 out (powerset (set (keys components)))
+                 :let [k       {:in in :out out}
+                       options (filter
+                                 (fn [[k v]]
+                                   (and (= (set (:order v)) (sets/union in out))
+                                        (= (set (take (count in) (:order v))) in)))
+                                 indexes)]
+                 :when (not-empty options)]
+             [k (into #{} (map key options))])))
 
 (defn logic-var? [x]
   (and (symbol? x) (clojure.string/starts-with? (name x) "?")))
@@ -132,20 +113,26 @@
 (defn rule? [x]
   (and (seq? x) (symbol? (first x))))
 
-(defn execute-search [db plan inputs outputs]
-  {:attrs  (set (vals outputs))
-   :tuples (set (for [match (if (= :range (:operation plan))
-                              (let [start-key (select-keys inputs (:start plan))
-                                    stop-key  (select-keys inputs (:stop plan))]
-                                (pss/slice (get db (:index plan))
-                                           start-key
-                                           stop-key
-                                           (fn [a b]
-                                             (safe-compare
-                                               (mapv a (:start plan))
-                                               (mapv b (:start plan))))))
-                              (get-in db [(:index plan)]))]
-                  (reduce (fn [agg [k v]] (assoc agg v (get match k))) {} outputs)))})
+(defn execute-search [db index inputs outputs]
+  (let [partial-order (->> (get-in indexes [index :order])
+                           (take-while (fn [component] (contains? inputs component))))
+        comparator    (partial safe-compare partial-order)]
+    {:attrs  (set (vals outputs))
+     :tuples (set (for [match
+                        (if (not-empty inputs)
+                          (let [start-key (select-keys inputs partial-order)
+                                stop-key  (select-keys inputs partial-order)]
+                            (pss/slice (get db index) start-key stop-key comparator))
+                          (get db index))]
+                    (reduce (fn [agg [k v]] (assoc agg v (get match k))) {} outputs)))}))
+
+(defn greatest [indices]
+  (reduce
+    (fn [greatest-so-far x]
+      (if (neg? (compare greatest-so-far x))
+        x
+        greatest-so-far))
+    indices))
 
 (defn dispatch [ctx clause]
   (cond
@@ -170,90 +157,63 @@
         rev-logic  (reverse-map logic-vars)
         const-vars (get-constants clause)
         const-keys (set (keys const-vars))
-        logic-keys (set (keys logic-vars))
-        new-rel    (cond
-                     ; pattern is at least partially constrained by existing relation
-                     (algebra/intersects? (:attrs relation) (set (vals logic-vars)))
-                     (reduce (fn [relation binding]
-                               (let [binding-vars     (into {} (map (fn [[logic-var-name value]]
-                                                                      {(get rev-logic logic-var-name) value}))
-                                                            binding)
+        logic-keys (set (keys logic-vars))]
+    (cond
+      ; pattern is at least partially constrained by existing relation
+      (algebra/intersects? (:attrs relation) (set (vals logic-vars)))
+      (reduce (fn [relation binding]
+                (let [binding-vars      (into {} (map (fn [[logic-var-name value]]
+                                                        {(get rev-logic logic-var-name) value}))
+                                              binding)
+                      known-positions   (sets/union (set (keys binding-vars)) const-keys)
+                      output-positions  (set (keys logic-vars))
+                      candidate-indices (get index-selection {:in known-positions :out output-positions})
+                      selected-index    (greatest candidate-indices)
+                      search-relation   (execute-search db selected-index (merge binding-vars const-vars) logic-vars)]
+                  (algebra/join relation search-relation)))
+              (algebra/create-relation)
+              (:tuples (algebra/projection relation (set (vals logic-vars)))))
 
-                                     known-positions  (sets/union (set (keys binding-vars)) const-keys)
-                                     output-positions (set (keys logic-vars))
-                                     index-plan       (get-in index-selection [{:in known-positions :out output-positions} :plan])
-                                     search-relation  (execute-search db index-plan (merge binding-vars const-vars) logic-vars)]
-                                 (algebra/join relation search-relation)))
-                             relation
-                             (:tuples (algebra/projection relation (set (vals logic-vars)))))
-
-                     :else
-                     (let [index-plan      (get-in index-selection [{:in const-keys :out logic-keys} :plan])
-                           search-relation (execute-search db index-plan const-vars logic-vars)]
-                       (algebra/union relation search-relation)))]
-    (assoc ctx :relation new-rel)))
+      :else
+      (let [candidate-indices (get index-selection {:in const-keys :out logic-keys})
+            selected-index    (greatest candidate-indices)]
+        (execute-search db selected-index const-vars logic-vars)))))
 
 (defmethod plan :predicate [{:keys [relation] :as ctx} clause]
-  ctx)
+  (:relation ctx))
 
 (defmethod plan :binding [{:keys [relation] :as ctx} clause]
-  ctx)
+  (:relation ctx))
 
-(defmethod plan :and [context [_ & children :as clause]]
+(defmethod plan :and [{:keys [relation] :as ctx} [_ & children :as clause]]
   (reduce
-    (fn [ctx' child]
-      (plan ctx' child))
-    context
+    (fn [relation child]
+      (algebra/join relation (plan (assoc ctx :relation relation) child)))
+    relation
     children))
 
-(defmethod plan :or [ctx [_ & children :as clause]]
+(defmethod plan :or [{:keys [relation] :as ctx} [_ & children :as clause]]
   (reduce
-    (fn [ctx' child]
-      (plan ctx' child))
-    ctx
+    (fn [relation' child]
+      (algebra/union relation' (plan (assoc ctx :relation relation) child)))
+    relation
     children))
 
 (defmethod plan :not [ctx [_ & children :as clause]]
-  ctx)
+  (:relation ctx))
 
 (defmethod plan :or-join [ctx [_ & children :as clause]]
-  (reduce
-    (fn [ctx' child]
-      (plan ctx' child))
-    ctx
-    children))
+  (:relation ctx))
 
 (defmethod plan :and-join [ctx [_ & children :as clause]]
-  (reduce
-    (fn [ctx' child]
-      (plan ctx' child))
-    ctx
-    children))
+  (:relation ctx))
 
 (defmethod plan :not-join [ctx [_ & children :as clause]]
-  (reduce
-    (fn [ctx' child]
-      (plan ctx' child))
-    ctx
-    children))
+  (:relation ctx))
 
 (defmethod plan :rule [ctx clause]
-  )
-
+  (:relation ctx))
 
 (defn plan* [db clauses]
-  (plan {:relation (algebra/create-relation) :db db} (cons 'and clauses)))
-
-(defn execute* [db plan]
-  )
-
-(comment
-
-  (def query
-    '[:find ?e ?n
-      :where
-      [?e :person/name ?n]
-      [?e :person/age ?a]
-      [(> ?a 21)]])
-
-  )
+  (plan {:relation (algebra/create-relation) :db db}
+        (if (list? clauses) clauses (cons 'and clauses))))
