@@ -21,14 +21,24 @@
                        (conj % item)) samples)
             (rest cols)))))
 
+(defn empty-rel? [rel]
+  (or (empty? (:attrs rel)) (empty? (:tuples rel))))
+
 (defn union-compatible? [rel1 rel2]
   (= (:attrs rel1) (:attrs rel2)))
 
-(defn restriction [rel1 pred]
-  (update rel1 :tuples (fn [tuples] (into #{} (filter pred) tuples))))
+(defn intersects? [s1 s2]
+  (let [[larger smaller] (if (< (count s1) (count s2)) [s2 s1] [s1 s2])]
+    (reduce (fn [nf x] (if (contains? larger x) (reduced true) nf)) false smaller)))
 
-(defn projection [rel1 attrs]
-  {:attrs rel1 :tuples (into #{} (map #(select-keys % attrs)) (:tuples rel1))})
+(defn restriction [rel pred]
+  (update rel :tuples (fn [tuples] (into #{} (filter pred) tuples))))
+
+(defn projection [rel attrs]
+  (if (intersects? (:attrs rel) attrs)
+    {:attrs  (sets/intersection (:attrs rel) attrs)
+     :tuples (into #{} (map #(select-keys % attrs)) (:tuples rel))}
+    (create-relation)))
 
 (defn cartesian-product [rel1 rel2]
   {:attrs  (sets/union (:attrs rel1) (:attrs rel2))
@@ -44,19 +54,23 @@
    :tuples (sets/difference (:tuples rel1) (:tuples rel2))})
 
 (defn join [rel1 rel2]
-  {:attrs  (sets/union (:attrs rel1) (:attrs rel2))
-   :tuples (let [join-attrs (sets/intersection (:attrs rel1) (:attrs rel2))
-                 [larger smaller] (if (< (count (:tuples rel1)) (count (:tuples rel1)))
-                                    [rel1 rel2]
-                                    [rel2 rel1])
-                 table      (into {} (map (fn [x] [(select-keys x join-attrs) x])) (:tuples smaller))]
-             (into #{} (keep (fn [x] (when-some [match (get table (select-keys x join-attrs))]
-                                       (merge x match))))
-                   (:tuples larger)))})
+  (let [join-attrs (sets/intersection (:attrs rel1) (:attrs rel2))]
+    (if (empty? join-attrs)
+      (cartesian-product rel1 rel2)
+      (let [[larger smaller]
+            (if (< (count (:tuples rel1)) (count (:tuples rel1)))
+              [rel1 rel2]
+              [rel2 rel1])
+            table
+            (into {} (map (fn [x] [(select-keys x join-attrs) x])) (:tuples smaller))]
+        {:attrs  (sets/union (:attrs rel1) (:attrs rel2))
+         :tuples (into #{} (keep (fn [x] (when-some [match (get table (select-keys x join-attrs))]
+                                           (merge x match))))
+                       (:tuples larger))}))))
 
 (defn intersection [rel1 rel2]
-  {:attrs  (sets/union (:attrs rel1) (:attrs rel2))
-   :tuples (sets/difference (:tuples rel1) (:tuples rel2))})
+  {:attrs  (sets/intersection (:attrs rel1) (:attrs rel2))
+   :tuples (sets/intersection (:tuples rel1) (:tuples rel2))})
 
 (defn rename [rel1 renames]
   {:attrs  (into #{} (map (fn [x] (get renames x x))) (:attrs rel1))
