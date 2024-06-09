@@ -3,11 +3,6 @@
             [me.tonsky.persistent-sorted-set :as pss]
             [io.github.rutledgepaulv.datagong.algebra :as algebra]))
 
-(def components
-  {:e {:name "entity" :index 0}
-   :a {:name "attribute" :index 1}
-   :v {:name "value" :index 2}})
-
 (def indexes
   {:eav {:order [:e :a :v]}
    :eva {:order [:e :v :a]}
@@ -23,41 +18,25 @@
    :a   {:order [:a]}
    :v   {:order [:v]}})
 
-(defn safe-compare [a b]
-  (try
-    (compare a b)
-    (catch Exception e
-      (compare
-        [(str (class a)) (hash a)]
-        [(str (class b)) (hash b)]))))
+(defn safe-value [x]
+  [(str (class x)) (hash x)])
 
-(defn get-position [order component]
-  (case order
-    [:a] (case component :a 0)
-    [:e] (case component :e 0)
-    [:v] (case component :v 0)
-    [:a :e] (case component :e 0 :a 1)
-    [:a :v] (case component :a 0 :v 1)
-    [:e :v] (case component :e 0 :v 1)
-    [:v :a] (case component :a 0 :v 1)
-    [:v :e] (case component :e 0 :v 1)
-    [:a :e :v] (case component :e 0 :a 1 :v 2)
-    [:a :v :e] (case component :e 0 :a 1 :v 2)
-    [:e :a :v] (case component :e 0 :a 1 :v 2)
-    [:e :v :a] (case component :e 0 :a 1 :v 2)
-    [:v :a :e] (case component :e 0 :a 1 :v 2)))
+(defn safe-compare [a b]
+  (reduce
+    (fn [result [a' b']]
+      (let [result'
+            (try
+              (compare a' b')
+              (catch Exception e
+                (compare (safe-value a') (safe-value b'))))]
+        (if (zero? result')
+          result
+          (reduced result'))))
+    0
+    (map vector a b)))
 
 (defn create-comparator [order]
-  (fn [a b]
-    (reduce
-      (fn [result element]
-        (let [result'
-              (let [a' (nth a (get-position order element))
-                    b' (nth b (get-position order element))]
-                (safe-compare a' b'))]
-          (if (zero? result') result (reduced result'))))
-      0
-      order)))
+  (fn [a b] (safe-compare (mapv a order) (mapv b order))))
 
 (defn new-db
   ([] (new-db create-comparator))
@@ -74,15 +53,7 @@
     (reduce-kv
       (fn [agg k v]
         (let [{:keys [order]} (get indexes k)]
-          (assoc! agg k (conj v
-                              (let [components (set order)]
-                                (cond-> []
-                                  (contains? components :e)
-                                  (conj (nth datom 0))
-                                  (contains? components :a)
-                                  (conj (nth datom 1))
-                                  (contains? components :v)
-                                  (conj (nth datom 2))))))))
+          (assoc! agg k (conj v (select-keys (zipmap [:e :a :v] datom) order)))))
       (transient {})
       db)))
 
@@ -113,10 +84,14 @@
 
    {:in #{:e :v} :out #{:v :e}}       {:plan {:index :ev :operation :range :start [:e :v] :stop [:e :v]}}
    {:in #{:a :e} :out #{:e :a}}       {:plan {:index :ea :operation :range :start [:e :a] :stop [:e :a]}}
+   {:in #{:a :v} :out #{:e}}          {:plan {:index :ave :operation :range :start [:a :v] :stop [:a :v]}}
    {:in #{:a :v} :out #{:v :a}}       {:plan {:index :av :operation :range :start [:a :v] :stop [:a :v]}}
 
    {:in #{:e :v} :out #{:v :e :a}}    {:plan {:index :eva :operation :range :start [:e :v] :stop [:e :v]}}
    {:in #{:a :e} :out #{:v :e :a}}    {:plan {:index :eav :operation :range :start [:e :a] :stop [:e :a]}}
+
+   {:in #{:a :e} :out #{:v :e}}       {:plan {:index :eav :operation :range :start [:e :a] :stop [:e :a]}}
+
    {:in #{:a :v} :out #{:v :e :a}}    {:plan {:index :ave :operation :range :start [:a :v] :stop [:a :v]}}
 
    {:in #{:a :e :v} :out #{:v :e :a}} {:plan {:index :eav :operation :range :start [:e :a :v] :stop [:e :a :v]}}})
@@ -159,15 +134,18 @@
 
 (defn execute-search [db plan inputs outputs]
   {:attrs  (set (vals outputs))
-   :tuples (for [tuple (if (= :range (:operation plan))
-                         (subseq (get-in db [(:index plan)]) (get inputs (:start plan)) (get inputs (:stop plan)))
-                         (get-in db [(:index plan)]))]
-             (reduce
-               (fn [agg [k v]]
-                 (assoc agg v (case k :e (nth tuple 0)
-                                      :a (nth tuple 1)
-                                      :v (nth tuple 2))))
-               {} outputs))})
+   :tuples (set (for [match (if (= :range (:operation plan))
+                              (let [start-key (select-keys inputs (:start plan))
+                                    stop-key  (select-keys inputs (:stop plan))]
+                                (pss/slice (get db (:index plan))
+                                           start-key
+                                           stop-key
+                                           (fn [a b]
+                                             (safe-compare
+                                               (mapv a (:start plan))
+                                               (mapv b (:start plan))))))
+                              (get-in db [(:index plan)]))]
+                  (reduce (fn [agg [k v]] (assoc agg v (get match k))) {} outputs)))})
 
 (defn dispatch [ctx clause]
   (cond
@@ -207,7 +185,7 @@
                                      search-relation  (execute-search db index-plan (merge binding-vars const-vars) logic-vars)]
                                  (algebra/join relation search-relation)))
                              relation
-                             (:tuples (algebra/projection relation logic-vars)))
+                             (:tuples (algebra/projection relation (set (vals logic-vars)))))
 
                      :else
                      (let [index-plan      (get-in index-selection [{:in const-keys :out logic-keys} :plan])

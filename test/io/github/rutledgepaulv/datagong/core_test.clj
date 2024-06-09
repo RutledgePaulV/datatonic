@@ -11,3 +11,13 @@
 (def db (reduce dg/add-datom (dg/new-db) datoms))
 
 
+(deftest basic-searches
+  (is (= '{:attrs #{?age ?e}, :tuples #{{?e 2, ?age 35}}}
+         (:relation
+           (dg/plan* db '[[?e :person/name "David"]
+                          [?e :person/age ?age]]))))
+
+  (is (= '{:attrs #{?age ?e}, :tuples #{{?e 1, ?age 32}}}
+         (:relation
+           (dg/plan* db '[[?e :person/name "Paul"]
+                          [?e :person/age ?age]])))))
