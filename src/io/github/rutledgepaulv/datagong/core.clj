@@ -65,38 +65,34 @@
       (transient {})
       db)))
 
-(def index-selection
-  (into {} (for [in  (powerset (set (keys components)))
-                 out (powerset (set (keys components)))
-                 :let [k       {:in in :out out}
-                       options (filter
-                                 (fn [[k v]]
-                                   (and (= (set (:order v)) (sets/union in out))
-                                        (= (set (take (count in) (:order v))) in)))
-                                 indexes)]
-                 :when (not-empty options)]
-             [k (into #{} (map key options))])))
+(def index-router
+  (let [ps (powerset (set (keys components)))]
+    (into {} (for [in  ps
+                   out ps
+                   :let [k       {:in in :out out}
+                         options (filter
+                                   (fn [[k v]]
+                                     (and (= (set (:order v)) (sets/union in out))
+                                          (= (set (take (count in) (:order v))) in)))
+                                   indexes)]
+                   :when (not-empty options)]
+               [k (into #{} (map key options))]))))
 
 (defn logic-var? [x]
   (and (symbol? x) (clojure.string/starts-with? (name x) "?")))
 
-(defn get-logic-vars [[e a v]]
-  (cond-> {}
-    (logic-var? e)
-    (assoc :e e)
-    (logic-var? a)
-    (assoc :a a)
-    (logic-var? v)
-    (assoc :v v)))
+(defn get-vars [pred tuple]
+  (reduce
+    (fn [agg [k v]]
+      (if (pred v) (assoc agg k v) agg))
+    {}
+    (zipmap (keys components) tuple)))
 
-(defn get-constants [[e a v]]
-  (cond-> {}
-    (and (some? e) (not (logic-var? e)))
-    (assoc :e e)
-    (and (some? a) (not (logic-var? a)))
-    (assoc :a a)
-    (and (some? v) (not (logic-var? v)))
-    (assoc :v v)))
+(defn get-logic-vars [tuple]
+  (get-vars logic-var? tuple))
+
+(defn get-constants [tuple]
+  (get-vars (complement logic-var?) tuple))
 
 (defn reverse-map [x]
   (into {} (map (comp vec rseq vec)) x))
@@ -167,7 +163,7 @@
                                               binding)
                       known-positions   (sets/union (set (keys binding-vars)) const-keys)
                       output-positions  (set (keys logic-vars))
-                      candidate-indices (get index-selection {:in known-positions :out output-positions})
+                      candidate-indices (get index-router {:in known-positions :out output-positions})
                       selected-index    (greatest candidate-indices)
                       search-relation   (execute-search db selected-index (merge binding-vars const-vars) logic-vars)]
                   (algebra/join relation search-relation)))
@@ -175,7 +171,7 @@
               (:tuples (algebra/projection relation (set (vals logic-vars)))))
 
       :else
-      (let [candidate-indices (get index-selection {:in const-keys :out logic-keys})
+      (let [candidate-indices (get index-router {:in const-keys :out logic-keys})
             selected-index    (greatest candidate-indices)]
         (execute-search db selected-index const-vars logic-vars)))))
 
