@@ -8,7 +8,6 @@
    [2 :person/name "David"]
    [2 :person/age 35]])
 
-(def db
-  (reduce dg/add-datom (dg/new-db) datoms))
+(def db (reduce dg/add-datom (dg/new-db) datoms))
 
 

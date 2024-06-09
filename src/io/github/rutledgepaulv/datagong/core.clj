@@ -27,7 +27,9 @@
   (try
     (compare a b)
     (catch Exception e
-      (compare [(str (class a)) (hash a)] [(str (class b)) (hash b)]))))
+      (compare
+        [(str (class a)) (hash a)]
+        [(str (class b)) (hash b)]))))
 
 (defn get-position [order component]
   (case order
@@ -160,10 +162,12 @@
    :tuples (for [tuple (if (= :range (:operation plan))
                          (subseq (get-in db [(:index plan)]) (get inputs (:start plan)) (get inputs (:stop plan)))
                          (get-in db [(:index plan)]))]
-             (reduce (fn [agg [k v]] (assoc agg v (case k :e (nth tuple 0)
-                                                          :a (nth tuple 1)
-                                                          :v (nth tuple 2))))
-                     {} outputs))})
+             (reduce
+               (fn [agg [k v]]
+                 (assoc agg v (case k :e (nth tuple 0)
+                                      :a (nth tuple 1)
+                                      :v (nth tuple 2))))
+               {} outputs))})
 
 (defn dispatch [ctx clause]
   (cond
@@ -182,11 +186,6 @@
 
 (defmethod plan :default [ctx clause]
   (throw (ex-info "Unsupported query clause." {:clause clause})))
-
-; [?e _ ?v] => [1 _ 2] or [2 _ 3] or [3 _ 4]
-
-; [?e :attribute/name "value"] => [1 :attribute/name "value"] or [2 :attribute/name "value"]
-; [?e :attribute/name ?v]
 
 (defmethod plan :pattern [{:keys [relation db] :as ctx} clause]
   (let [logic-vars (get-logic-vars clause)
