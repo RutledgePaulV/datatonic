@@ -14,7 +14,7 @@
 
 (defn execute [term]
   (let [plan (plan/plan* db term)]
-    (execute/execute db plan)))
+    (execute/execute* db plan)))
 
 (deftest basic-searches
 

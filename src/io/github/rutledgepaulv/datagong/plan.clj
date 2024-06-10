@@ -1,5 +1,6 @@
 (ns io.github.rutledgepaulv.datagong.plan
   (:require [clojure.set :as sets]
+            [clojure.string :as str]
             [io.github.rutledgepaulv.datagong.utils :as utils]
             [io.github.rutledgepaulv.datagong.index :as index]))
 
@@ -24,7 +25,7 @@
           candidate-indices (get (:router db) scenario)
           selected-index    (first candidate-indices)]
       [:search
-       {:index selected-index
+       {:index (keyword (str/join (map name selected-index)))
         :in    (merge const-bindings (utils/reverse-map (select-keys reversed bound-logic-vars)))
         :out   logic-bindings}])))
 
@@ -57,7 +58,21 @@
     (into [:and {:in bindings :out outputs}] statement)))
 
 (defmethod plan :or [db bindings [_ & children :as clause]]
-  )
+  (let [{statement :statement outputs :bindings}
+        (reduce (fn [agg clause]
+                  (let [[kind attrs :as statement] (plan db bindings clause)]
+                    (cond->
+                      agg
+                      (= :search kind)
+                      (update :bindings into (vals (:out attrs)))
+                      (not= :search kind)
+                      (update :bindings into (:out attrs))
+                      :always
+                      (update :statement conj statement))))
+                {:bindings  bindings
+                 :statement []}
+                children)]
+    (into [:or {:in bindings :out outputs}] statement)))
 
 (defmethod plan :not [db bindings [_ & children :as clause]]
   )

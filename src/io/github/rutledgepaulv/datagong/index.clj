@@ -65,11 +65,10 @@
    default but can be customized to create specific indices
    to decrease storage usage. Queries use the best available
    index in each case."
-  ([] (new-db (all-orderings [:e :a :v])))
-  ([index-orderings]
-   (let [indices    (create-indices index-orderings)
-         router     (create-router index-orderings)
-         components (into #{} (mapcat identity) index-orderings)]
+  ([] (new-db [:e :a :v] (all-orderings [:e :a :v])))
+  ([components orderings]
+   (let [indices (create-indices orderings)
+         router  (create-router orderings)]
      {:components components
       :indices    indices
       :router     router})))
@@ -110,7 +109,9 @@
 (comment
 
   (new-db
+    [:e :a :v]
     [[:e :a :v]
      [:a :e :v]
      [:v :a :e]])
+
   )
