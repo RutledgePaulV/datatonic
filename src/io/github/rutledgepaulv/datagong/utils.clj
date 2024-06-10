@@ -5,7 +5,7 @@
   (and (symbol? x) (clojure.string/starts-with? (name x) "?")))
 
 (defn logic-vars [x]
-  (into #{} (filter logic-var?) x))
+  (into #{} (filter symbol?) (tree-seq coll? seq x)))
 
 (defn reverse-map [x]
   (into {} (map (comp vec rseq vec)) x))
@@ -28,6 +28,10 @@
 
 (defn permuted-powerset [xs]
   (for [i (range (count xs))] (combos/permuted-combinations xs (inc i))))
+
+(defn ensure-resolved [symbol]
+  (if (qualified-symbol? symbol) symbol
+    (.toSymbol (ns-resolve (the-ns 'clojure.core) symbol))))
 
 (defn classify-clause [clause]
   (cond

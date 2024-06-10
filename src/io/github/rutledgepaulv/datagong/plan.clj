@@ -31,14 +31,18 @@
 
 (defmethod plan :predicate [db bindings clause]
   [:predicate
-   {:in (utils/logic-vars (first clause))
-    :fn (ffirst clause)}])
+   {:in   (sets/intersection bindings (utils/logic-vars (first clause)))
+    :args (vec (rest (first clause)))
+    :fn   (utils/ensure-resolved (ffirst clause))
+    :out  #{}}])
 
 (defmethod plan :binding [db bindings clause]
   [:binding
-   {:in  (utils/logic-vars (first clause))
-    :fn  (ffirst clause)
-    :out (utils/logic-vars (second clause))}])
+   {:in          (sets/intersection bindings (utils/logic-vars (first clause)))
+    :fn          (utils/ensure-resolved (ffirst clause))
+    :args        (vec (rest (first clause)))
+    :out         (utils/logic-vars (second clause))
+    :out-pattern (second clause)}])
 
 (defmethod plan :and [db bindings [_ & children :as clause]]
   (let [{statement :statement outputs :bindings}
@@ -74,17 +78,49 @@
                 children)]
     (into [:or {:in bindings :out outputs}] statement)))
 
-(defmethod plan :not [db bindings [_ & children :as clause]]
-  )
+(defmethod plan :not [db bindings [_ child :as clause]]
+  (let [child-plan             (plan db bindings child)
+        child-input-logic-vars (into #{} (filter utils/logic-var?) (vals (:in (second child-plan))))]
+    [:not {:in (sets/intersection bindings child-input-logic-vars) :out #{}} child-plan]))
 
-(defmethod plan :or-join [db bindings [_ & children :as clause]]
-  )
+(defmethod plan :or-join [db bindings [_ binding-vector & children :as clause]]
+  (let [{statement :statement outputs :bindings}
+        (reduce (fn [agg clause]
+                  (let [[kind attrs :as statement] (plan db (sets/intersection bindings (set binding-vector)) clause)]
+                    (cond->
+                      agg
+                      (= :search kind)
+                      (update :bindings into (vals (:out attrs)))
+                      (not= :search kind)
+                      (update :bindings into (:out attrs))
+                      :always
+                      (update :statement conj statement))))
+                {:bindings  bindings
+                 :statement []}
+                children)]
+    (into [:or {:in bindings :out (sets/intersection outputs (set binding-vector))}] statement)))
 
-(defmethod plan :and-join [db bindings [_ & children :as clause]]
-  )
+(defmethod plan :and-join [db bindings [_ binding-vector & children :as clause]]
+  (let [{statement :statement outputs :bindings}
+        (reduce (fn [agg clause]
+                  (let [[kind attrs :as statement] (plan db (sets/intersection (:bindings agg) (set binding-vector)) clause)]
+                    (cond->
+                      agg
+                      (= :search kind)
+                      (update :bindings into (vals (:out attrs)))
+                      (not= :search kind)
+                      (update :bindings into (:out attrs))
+                      :always
+                      (update :statement conj statement))))
+                {:bindings  bindings
+                 :statement []}
+                children)]
+    (into [:and {:in bindings :out (sets/intersection outputs (set binding-vector))}] statement)))
 
-(defmethod plan :not-join [db bindings [_ & children :as clause]]
-  )
+(defmethod plan :not-join [db bindings [_ binding-vector & children :as clause]]
+  (let [child-plan             (plan db (sets/intersection bindings (set binding-vector)) (cons 'and children))
+        child-input-logic-vars (into #{} (filter utils/logic-var?) (vals (:in (second child-plan))))]
+    [:not {:in (sets/intersection bindings (set binding-vector) child-input-logic-vars) :out #{}} child-plan]))
 
 (defmethod plan :rule [db bindings clause]
   )
@@ -102,5 +138,40 @@
   #_[:and {:in #{}, :out #{?age ?e}}
      [:search {:index [:e :a :v], :in {:e :person/name, :a "David"}, :out {:v ?e}}]
      [:search {:index [:v :e :a], :in {:e :person/age, :v ?e}, :out {:v ?e, :a ?age}}]]
+
+  (plan* (index/new-db) '(or-join [?e]
+                                  (and [?e :person/name "David"]
+                                       [?e :person/age 35])
+                                  (and [?e :person/name "Paul"]
+                                       [?e :person/age 32])))
+
+  #_[:or {:in #{}, :out #{?e}}
+     [:and {:in #{}, :out #{?e}}
+      [:search {:index :vae, :in {:a :person/name, :v "David"}, :out {:e ?e}}]
+      [:search {:index :vea, :in {:a :person/age, :v 35, :e ?e}, :out {:e ?e}}]]
+     [:and {:in #{}, :out #{?e}}
+      [:search {:index :vae, :in {:a :person/name, :v "Paul"}, :out {:e ?e}}]
+      [:search {:index :vea, :in {:a :person/age, :v 32, :e ?e}, :out {:e ?e}}]]]
+
+  (plan* (index/new-db) '(and-join [?e]
+                                   (and [?e :person/name "David"]
+                                        [?e :person/age 35])
+                                   (and [?e :person/name "Paul"]
+                                        [?e :person/age 32])))
+
+  #_[:and {:in #{}, :out #{?e}}
+     [:and {:in #{}, :out #{?e}}
+      [:search {:index :vae, :in {:a :person/name, :v "David"}, :out {:e ?e}}]
+      [:search {:index :vea, :in {:a :person/age, :v 35, :e ?e}, :out {:e ?e}}]]
+     [:and {:in #{?e}, :out #{?e}}
+      [:search {:index :vea, :in {:a :person/name, :v "Paul", :e ?e}, :out {:e ?e}}]
+      [:search {:index :vea, :in {:a :person/age, :v 32, :e ?e}, :out {:e ?e}}]]]
+
+  (plan* (index/new-db) '[[?e :person/name ?name] (not [?e :person/age 35])])
+
+  #_[:and {:in #{}, :out #{?e ?name}}
+     [:search {:index :ave, :in {:a :person/name}, :out {:e ?e, :v ?name}}]
+     [:not {:in #{?e}, :out #{}}
+      [:search {:index :vea, :in {:a :person/age, :v 35, :e ?e}, :out {:e ?e}}]]]
 
   )

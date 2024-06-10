@@ -55,7 +55,7 @@
                                                  [(score-index-for-input largest-index a input) a])))))))
 
 (defn create-router
-  "Given a set of components, produce a router of input+output => ranked set of candidate indices (best to worst)"
+  "Given a set of orderings produce a router of input+output => ranked set of candidate indices (best to worst)"
   [index-orderings]
   (let [ps (utils/powerset (into #{} (mapcat identity) index-orderings))]
     (into {} (for [in ps out ps] [{:in in :out out} (available-indices index-orderings in out)]))))
@@ -89,11 +89,12 @@
         comparator    (partial safe-compare partial-order)]
     {:attrs  (set (vals outputs))
      :tuples (set (for [match
-                        (if (not-empty inputs)
-                          (let [start-key (select-keys inputs partial-order)
-                                stop-key  (select-keys inputs partial-order)]
-                            (pss/slice (get-in db [:indices index :data]) start-key stop-key comparator))
-                          (get-in db [:indices index :data]))]
+                        (->> (if (not-empty inputs)
+                               (let [start-key (select-keys inputs partial-order)
+                                     stop-key  (select-keys inputs partial-order)]
+                                 (pss/slice (get-in db [:indices index :data]) start-key stop-key comparator))
+                               (get-in db [:indices index :data]))
+                             (filter (fn [datom] (= inputs (select-keys datom (keys inputs))))))]
                     (reduce (fn [agg [k v]] (assoc agg v (get match k))) {} outputs)))}))
 
 (defn filter-vals [pred m]
@@ -112,6 +113,7 @@
     [:e :a :v]
     [[:e :a :v]
      [:a :e :v]
+     [:a :v :e]
      [:v :a :e]])
 
   )

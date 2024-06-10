@@ -1,5 +1,6 @@
 (ns io.github.rutledgepaulv.datagong.execute
-  (:require [io.github.rutledgepaulv.datagong.index :as index]
+  (:require [clojure.set :as sets]
+            [io.github.rutledgepaulv.datagong.index :as index]
             [io.github.rutledgepaulv.datagong.utils :as utils]
             [io.github.rutledgepaulv.datagong.algebra :as algebra]))
 
@@ -44,10 +45,22 @@
               (:tuples (algebra/projection relation (set (vals in))))))
     (index/execute-search db index in out)))
 
-(defmethod execute :binding [db relation [_ props & children]]
-  )
 
-(defmethod execute :predicate [db relation [_ props & children]]
+(defmethod execute :binding [db relation [_ {:keys [in out fn args out-pattern]}]]
+  (let [child {:attrs  (sets/union in out)
+               :tuples (set (for [binding (:tuples (algebra/projection relation in))
+                                  output  (let [return-value (apply (requiring-resolve fn) (map #(get binding % %) args))]
+                                            (cond
+                                              (symbol? out-pattern)
+                                              [{out-pattern return-value}]
+                                              (and (vector? out-pattern) (vector? (first out-pattern)))
+                                              (for [v return-value] (zipmap (first out-pattern) v))
+                                              (and (vector? out-pattern) (coll? return-value))
+                                              (zipmap out-pattern (first return-value))))]
+                              (merge output binding)))}]
+    (algebra/join relation child)))
+
+(defmethod execute :predicate [db relation [_ props]]
   )
 
 (defn execute* [db plan]
