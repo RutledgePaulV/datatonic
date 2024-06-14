@@ -4,7 +4,8 @@
   (:require [clojure.set :as sets]
             [io.github.rutledgepaulv.datatonic.index :as index]
             [io.github.rutledgepaulv.datatonic.utils :as utils]
-            [io.github.rutledgepaulv.datatonic.algebra :as algebra]))
+            [io.github.rutledgepaulv.datatonic.algebra :as algebra]
+            [io.github.rutledgepaulv.datatonic.dynamic-optimizer :as do]))
 
 (defn dispatch [db relation node]
   (first node))
@@ -62,6 +63,9 @@
                                   :when (apply (requiring-resolve fn) (map #(get binding % %) args))]
                               binding))}]
     (algebra/join relation child)))
+
+(defmethod execute :optimize [db relation [_ plan]]
+  (execute db relation (do/optimize* db relation plan)))
 
 (defn execute* [db plan]
   (execute db (algebra/create-relation) plan))
