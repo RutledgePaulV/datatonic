@@ -1,3 +1,3 @@
+A tonic for what ails me.
 
-An exploration of datascript-like databases and query planning/explaining.
-
+Also, an exploration of triple stores and query planning/explaining/optimization/execution.
