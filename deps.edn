@@ -2,9 +2,13 @@
  :deps  {persistent-sorted-set/persistent-sorted-set {:mvn/version "0.3.0"}
          org.clojure/math.combinatorics              {:mvn/version "0.3.0"}
          com.google.guava/guava                      {:mvn/version "33.2.1-jre"}}
- 
+
  :aliases
  {:test      {:extra-paths ["test"]}
+  :perf      {:extra-deps {com.clojure-goes-fast/clj-async-profiler {:mvn/version "1.2.2"}}
+              :jvm-opts   ["-XX:+UnlockDiagnosticVMOptions"
+                           "-XX:+DebugNonSafepoints"
+                           "-Djdk.attach.allowAttachSelf=true"]}
   :run-tests {:extra-deps {io.github.cognitect-labs/test-runner
                            {:git/url "https://github.com/cognitect-labs/test-runner.git"
                             :git/sha "7284cda41fb9edc0f3bc6b6185cfb7138fc8a023"}}

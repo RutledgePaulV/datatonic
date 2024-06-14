@@ -1,12 +1,16 @@
 (ns io.github.rutledgepaulv.datatonic.plan
+  "Given a database and a query, compute a query plan. This namespace
+   prioritizes correctness and may emit seemingly naive plans.
+   Performance is left as an exercise for the optimizer."
   (:require [clojure.set :as sets]
             [clojure.string :as str]
             [io.github.rutledgepaulv.datatonic.utils :as utils]
             [io.github.rutledgepaulv.datatonic.index :as index]))
 
-(defmulti plan
-  (fn [db bindings node]
-    (utils/classify-clause node)))
+(defn dispatch [db bindings node]
+  (utils/classify-clause node))
+
+(defmulti plan #'dispatch)
 
 (defmethod plan :default [db bindings clause]
   (throw (ex-info "Unsupported query clause." {:clause clause})))
@@ -128,50 +132,3 @@
 (defn plan* [db clauses]
   (plan db #{} (if (list? clauses) clauses (cons 'and clauses))))
 
-
-(comment
-
-  (plan* (index/new-db)
-         '[[?e :person/name "David"]
-           [?e :person/age ?age]])
-
-  #_[:and {:in #{}, :out #{?age ?e}}
-     [:search {:index [:e :a :v], :in {:e :person/name, :a "David"}, :out {:v ?e}}]
-     [:search {:index [:v :e :a], :in {:e :person/age, :v ?e}, :out {:v ?e, :a ?age}}]]
-
-  (plan* (index/new-db) '(or-join [?e]
-                                  (and [?e :person/name "David"]
-                                       [?e :person/age 35])
-                                  (and [?e :person/name "Paul"]
-                                       [?e :person/age 32])))
-
-  #_[:or {:in #{}, :out #{?e}}
-     [:and {:in #{}, :out #{?e}}
-      [:search {:index :vae, :in {:a :person/name, :v "David"}, :out {:e ?e}}]
-      [:search {:index :vea, :in {:a :person/age, :v 35, :e ?e}, :out {:e ?e}}]]
-     [:and {:in #{}, :out #{?e}}
-      [:search {:index :vae, :in {:a :person/name, :v "Paul"}, :out {:e ?e}}]
-      [:search {:index :vea, :in {:a :person/age, :v 32, :e ?e}, :out {:e ?e}}]]]
-
-  (plan* (index/new-db) '(and-join [?e]
-                                   (and [?e :person/name "David"]
-                                        [?e :person/age 35])
-                                   (and [?e :person/name "Paul"]
-                                        [?e :person/age 32])))
-
-  #_[:and {:in #{}, :out #{?e}}
-     [:and {:in #{}, :out #{?e}}
-      [:search {:index :vae, :in {:a :person/name, :v "David"}, :out {:e ?e}}]
-      [:search {:index :vea, :in {:a :person/age, :v 35, :e ?e}, :out {:e ?e}}]]
-     [:and {:in #{?e}, :out #{?e}}
-      [:search {:index :vea, :in {:a :person/name, :v "Paul", :e ?e}, :out {:e ?e}}]
-      [:search {:index :vea, :in {:a :person/age, :v 32, :e ?e}, :out {:e ?e}}]]]
-
-  (plan* (index/new-db) '[[?e :person/name ?name] (not [?e :person/age 35])])
-
-  #_[:and {:in #{}, :out #{?e ?name}}
-     [:search {:index :ave, :in {:a :person/name}, :out {:e ?e, :v ?name}}]
-     [:not {:in #{?e}, :out #{}}
-      [:search {:index :vea, :in {:a :person/age, :v 35, :e ?e}, :out {:e ?e}}]]]
-
-  )

@@ -1,11 +1,18 @@
 (ns io.github.rutledgepaulv.datatonic.execute
+  "Given a database and a query plan, execute the plan and perform
+   all the necessary algebra to produce a single relation."
   (:require [clojure.set :as sets]
             [io.github.rutledgepaulv.datatonic.index :as index]
             [io.github.rutledgepaulv.datatonic.utils :as utils]
             [io.github.rutledgepaulv.datatonic.algebra :as algebra]))
 
+(defn dispatch [db relation node]
+  (first node))
 
-(defmulti execute (fn [db relation node] (first node)))
+(defmulti execute #'dispatch)
+
+(defmethod execute :default [db relation node]
+  (throw (ex-info "Unsupported execution node." {:node node})))
 
 (defmethod execute :and [db relation [_ props & children]]
   (reduce (partial execute db) relation children))
