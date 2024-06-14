@@ -1,7 +1,7 @@
-(ns io.github.rutledgepaulv.datagong.index
+(ns io.github.rutledgepaulv.datatonic.index
   (:require [clojure.set :as sets]
             [clojure.string :as str]
-            [io.github.rutledgepaulv.datagong.utils :as utils]
+            [io.github.rutledgepaulv.datatonic.utils :as utils]
             [me.tonsky.persistent-sorted-set :as pss]))
 
 (defn safe-value [x]

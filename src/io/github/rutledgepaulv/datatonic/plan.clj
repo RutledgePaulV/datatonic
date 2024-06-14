@@ -1,8 +1,8 @@
-(ns io.github.rutledgepaulv.datagong.plan
+(ns io.github.rutledgepaulv.datatonic.plan
   (:require [clojure.set :as sets]
             [clojure.string :as str]
-            [io.github.rutledgepaulv.datagong.utils :as utils]
-            [io.github.rutledgepaulv.datagong.index :as index]))
+            [io.github.rutledgepaulv.datatonic.utils :as utils]
+            [io.github.rutledgepaulv.datatonic.index :as index]))
 
 (defmulti plan
   (fn [db bindings node]

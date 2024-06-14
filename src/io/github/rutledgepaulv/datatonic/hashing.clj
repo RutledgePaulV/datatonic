@@ -1,4 +1,4 @@
-(ns io.github.rutledgepaulv.datagong.hashing
+(ns io.github.rutledgepaulv.datatonic.hashing
   (:import (clojure.lang IPersistentMap IPersistentSet Keyword MapEntry PersistentTreeMap PersistentTreeSet Sequential)
            (com.google.common.hash Funnel HashCode HashFunction Hashing PrimitiveSink)
            (java.nio.charset Charset)

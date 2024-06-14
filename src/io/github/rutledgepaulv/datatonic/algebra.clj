@@ -1,4 +1,4 @@
-(ns io.github.rutledgepaulv.datagong.algebra
+(ns io.github.rutledgepaulv.datatonic.algebra
   (:require [clojure.set :as sets]))
 
 (defn create-relation
@@ -50,7 +50,7 @@
    :tuples (sets/union (:tuples rel1) (:tuples rel2))})
 
 (defn difference [rel1 rel2]
-  {:attrs  (sets/union (:attrs rel1) (:attrs rel2))
+  {:attrs  (:attrs rel1)
    :tuples (sets/difference (:tuples rel1) (:tuples rel2))})
 
 (defn join [rel1 rel2]
@@ -69,7 +69,7 @@
                        (:tuples larger))}))))
 
 (defn intersection [rel1 rel2]
-  {:attrs  (sets/intersection (:attrs rel1) (:attrs rel2))
+  {:attrs  (:attrs rel1)
    :tuples (sets/intersection (:tuples rel1) (:tuples rel2))})
 
 (defn rename [rel1 renames]

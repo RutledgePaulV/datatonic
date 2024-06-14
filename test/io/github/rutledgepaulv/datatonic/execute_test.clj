@@ -1,8 +1,8 @@
-(ns io.github.rutledgepaulv.datagong.execute-test
+(ns io.github.rutledgepaulv.datatonic.execute-test
   (:require [clojure.test :refer :all]
-            [io.github.rutledgepaulv.datagong.execute :as execute]
-            [io.github.rutledgepaulv.datagong.plan :as plan]
-            [io.github.rutledgepaulv.datagong.index :as index]))
+            [io.github.rutledgepaulv.datatonic.execute :as execute]
+            [io.github.rutledgepaulv.datatonic.plan :as plan]
+            [io.github.rutledgepaulv.datatonic.index :as index]))
 
 (def datoms
   [[1 :person/name "Paul"]
@@ -27,12 +27,48 @@
 
 (def dbs [all-indices datomic-esq datascript-esq])
 
-(defn execute [term db]
-  (->> term
-       (plan/plan* db)
-       (execute/execute* db)))
+(defn plan
+  ([q]
+   (plan q all-indices))
+  ([q db]
+   (plan/plan* db q)))
+
+(defn execute
+  ([q]
+   (execute q all-indices))
+  ([q db]
+   (execute/execute* db (plan/plan* db q))))
+
 
 (deftest basic-searches
+
+  (testing "predicates"
+    (are [query expected] (apply = expected (map (partial execute query) dbs))
+      '[[?e]
+        [(even? ?e)]]
+      '{:attrs  #{?e}
+        :tuples #{{?e 2}}}
+
+      '[[?e ?a ?v]
+        [(even? ?e)]
+        (and
+          [(number? ?v)]
+          [(odd? ?v)])]
+      '{:attrs  #{?a ?v ?e}
+        :tuples #{{?e 2 ?a :person/age ?v 35}}}))
+
+  (testing "not removes the elements which unify"
+    (are [query expected] (apply = expected (map (partial execute query) dbs))
+      '[[?e :person/age ?a]
+        (not [?e :person/name "Paul"])]
+      '{:attrs  #{?a ?e}
+        :tuples #{{?e 2 ?a 35}}}
+
+      '[[?e :person/age ?a]
+        (not [?e :person/name "Paul"])
+        (not [?e :person/age 32])]
+      '{:attrs  #{?a ?e}
+        :tuples #{{?e 2 ?a 35}}}))
 
   (testing "Correctly unifies two clauses on entity"
     (are [query expected] (apply = expected (map (partial execute query) dbs))
@@ -63,9 +99,9 @@
     (are [query expected] (apply = expected (map (partial execute query) dbs))
       '[[?e :person/name]
         [(even? ?e) ?even]]
-      '{:attrs  #{?e ?even},
-        :tuples #{{?even false, ?e 1}
-                  {?even true, ?e 2}}}))
+      '{:attrs  #{?e ?even}
+        :tuples #{{?even false ?e 1}
+                  {?even true ?e 2}}}))
 
   (testing "supports all free variable matches"
     (are [query expected] (apply = expected (map (partial execute query) dbs))

@@ -1,4 +1,4 @@
-(ns io.github.rutledgepaulv.datagong.utils
+(ns io.github.rutledgepaulv.datatonic.utils
   (:require [clojure.math.combinatorics :as combos]))
 
 (defn logic-var? [x]
