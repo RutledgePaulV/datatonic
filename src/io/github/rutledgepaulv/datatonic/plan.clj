@@ -18,7 +18,7 @@
 (defmethod plan :pattern [db bindings clause]
   (let [clause-as-map    (zipmap (:components db) clause)
         logic-bindings   (index/get-logic-vars clause-as-map)
-        reversed         (utils/reverse-map logic-bindings)
+        reversed         (sets/map-invert logic-bindings)
         const-bindings   (index/get-constants clause-as-map)
         const-keys       (set (keys const-bindings))
         logic-keys       (set (keys logic-bindings))
@@ -30,7 +30,7 @@
           selected-index    (first candidate-indices)]
       [:search
        {:index (keyword (str/join (map name selected-index)))
-        :in    (merge const-bindings (utils/reverse-map (select-keys reversed bound-logic-vars)))
+        :in    (merge const-bindings (sets/map-invert (select-keys reversed bound-logic-vars)))
         :out   logic-bindings}])))
 
 (defmethod plan :predicate [db bindings clause]
@@ -127,8 +127,15 @@
     [:not {:in (sets/intersection bindings (set binding-vector) child-input-logic-vars) :out #{}} child-plan]))
 
 (defmethod plan :rule [db bindings clause]
-  )
+  (let [clauses (get-in db [:rules (first clause)])]))
 
 (defn plan* [db clauses]
   (plan db #{} (if (list? clauses) clauses (cons 'and clauses))))
 
+
+(comment
+
+  (plan*
+    (assoc (index/new-db) :rules rules)
+    )
+  )

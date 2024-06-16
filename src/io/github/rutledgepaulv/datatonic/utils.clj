@@ -7,9 +7,6 @@
 (defn logic-vars [x]
   (into #{} (filter symbol?) (tree-seq coll? seq x)))
 
-(defn reverse-map [x]
-  (into {} (map (comp vec rseq vec)) x))
-
 (defn pattern-clause? [x]
   (and (vector? x) (not (seq? (first x)))))
 

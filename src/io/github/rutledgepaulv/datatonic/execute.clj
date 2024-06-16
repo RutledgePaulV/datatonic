@@ -5,7 +5,7 @@
             [io.github.rutledgepaulv.datatonic.index :as index]
             [io.github.rutledgepaulv.datatonic.utils :as utils]
             [io.github.rutledgepaulv.datatonic.algebra :as algebra]
-            [io.github.rutledgepaulv.datatonic.dynamic-optimizer :as do]))
+            [io.github.rutledgepaulv.datatonic.dyno :as dyno]))
 
 (defn dispatch [db relation node]
   (first node))
@@ -21,7 +21,7 @@
 (defmethod execute :or [db relation [_ props & children]]
   (reduce
     (fn [relation' child]
-      ; intentionally uses the original relation
+      ; intentionally uses the original relation as basis
       (let [child-rel (execute db relation child)]
         (algebra/union relation' child-rel)))
     relation
@@ -34,7 +34,7 @@
   (algebra/join
     relation
     (if (algebra/intersects? (:attrs relation) (set (vals in)))
-      (let [rev-logic        (utils/reverse-map in)
+      (let [rev-logic        (sets/map-invert in)
             input-logic-vars (utils/logic-vars in)]
         (reduce (fn [relation binding]
                   (let [binding-vars (into {} (map (juxt (comp rev-logic key) val)) binding)]
@@ -65,7 +65,7 @@
     (algebra/join relation child)))
 
 (defmethod execute :optimize [db relation [_ plan]]
-  (execute db relation (do/optimize* db relation plan)))
+  (execute db relation (dyno/optimize* db relation plan)))
 
 (defn execute* [db plan]
   (execute db (algebra/create-relation) plan))
