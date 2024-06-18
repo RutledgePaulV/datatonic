@@ -64,6 +64,9 @@
                               binding))}]
     (algebra/join relation child)))
 
+(defmethod execute :rule [db relation [_ {:keys [in out]} expression]]
+  )
+
 (defmethod execute :optimize [db relation [_ plan]]
   (execute db relation (dyno/optimize* db relation plan)))
 

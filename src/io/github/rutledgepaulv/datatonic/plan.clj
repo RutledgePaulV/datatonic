@@ -107,7 +107,7 @@
 (defmethod plan :and-join [db bindings [_ binding-vector & children :as clause]]
   (let [{statement :statement outputs :bindings}
         (reduce (fn [agg clause]
-                  (let [[kind attrs :as statement] (plan db (sets/intersection (:bindings agg) (set binding-vector)) clause)]
+                  (let [[kind attrs :as statement] (plan db (:bindings agg) clause)]
                     (cond->
                       agg
                       (= :search kind)
@@ -126,8 +126,29 @@
         child-input-logic-vars (into #{} (filter utils/logic-var?) (vals (:in (second child-plan))))]
     [:not {:in (sets/intersection bindings (set binding-vector) child-input-logic-vars) :out #{}} child-plan]))
 
+(def ^:dynamic *rule-stack* #{})
+
+; expand rules but if we encounter a recursive invocation
+; then we just mark the point of recursion and will make
+; the executor handle the recursive execution
 (defmethod plan :rule [db bindings clause]
-  (let [clauses (get-in db [:rules (first clause)])]))
+  (if (contains? *rule-stack* [(first clause) (count clause)])
+    [:rule {:in  (sets/intersection bindings (utils/logic-vars clause))
+            :out (utils/logic-vars clause)}
+     clause]
+    (let [matching-rules
+          (filter
+            (fn [rule]
+              (and (= (ffirst rule) (first clause))
+                   (= (count (first rule)) (count clause))))
+            (get-in db [:rules]))
+          rewritten
+          (apply list 'or-join
+                 (vec (rest (ffirst matching-rules)))
+                 (map (fn [rule] (apply list 'and-join (vec (rest (first rule))) (rest rule)))
+                      matching-rules))]
+      (binding [*rule-stack* (conj *rule-stack* [(first clause) (count clause)])]
+        (plan db bindings rewritten)))))
 
 (defn plan* [db clauses]
   (plan db #{} (if (list? clauses) clauses (cons 'and clauses))))
@@ -135,7 +156,14 @@
 
 (comment
 
+  (def rules
+    '[[(ancestor ?c ?p)
+       [?p _ ?c]]
+      [(ancestor ?c ?p)
+       [?p1 _ ?c]
+       (ancestor ?p1 ?p)]])
+
   (plan*
     (assoc (index/new-db) :rules rules)
-    )
+    '(ancestor ?c ?p))
   )

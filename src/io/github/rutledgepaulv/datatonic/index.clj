@@ -104,7 +104,7 @@
   (filter-vals utils/logic-var? m))
 
 (defn get-constants [m]
-  (filter-vals (complement utils/logic-var?) m))
+  (filter-vals utils/constant? m))
 
 
 (comment

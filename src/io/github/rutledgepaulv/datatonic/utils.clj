@@ -4,8 +4,14 @@
 (defn logic-var? [x]
   (and (symbol? x) (clojure.string/starts-with? (name x) "?")))
 
+(defn wildcard? [x]
+  (= '_ x))
+
+(defn constant? [x]
+  (and (not (wildcard? x)) (not (logic-var? x))))
+
 (defn logic-vars [x]
-  (into #{} (filter symbol?) (tree-seq coll? seq x)))
+  (into #{} (filter logic-var?) (tree-seq coll? seq x)))
 
 (defn pattern-clause? [x]
   (and (vector? x) (not (seq? (first x)))))
