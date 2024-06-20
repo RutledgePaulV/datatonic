@@ -5,7 +5,8 @@
             [io.github.rutledgepaulv.datatonic.index :as index]
             [io.github.rutledgepaulv.datatonic.utils :as utils]
             [io.github.rutledgepaulv.datatonic.algebra :as algebra]
-            [io.github.rutledgepaulv.datatonic.dyno :as dyno]))
+            [io.github.rutledgepaulv.datatonic.dyno :as dyno]
+            [io.github.rutledgepaulv.datatonic.plan :as plan]))
 
 (defn dispatch [db relation node]
   (first node))
@@ -15,33 +16,35 @@
 (defmethod execute :default [db relation node]
   (throw (ex-info "Unsupported execution node." {:node node})))
 
-(defmethod execute :and [db relation [_ props & children]]
-  (reduce (partial execute db) relation children))
+(defmethod execute :and [db relation [_ {:keys [in out]} & children]]
+  (algebra/projection
+    (reduce (partial execute db) relation children)
+    (sets/union in out)))
 
-(defmethod execute :or [db relation [_ props & children]]
-  (reduce
-    (fn [relation' child]
-      ; intentionally uses the original relation as basis
-      (let [child-rel (execute db relation child)]
-        (algebra/union relation' child-rel)))
-    relation
-    children))
+(defmethod execute :or [db relation [_ {:keys [in out]} & children]]
+  (algebra/projection
+    (->> children
+         (map (partial execute db relation))
+         (reduce algebra/union))
+    (sets/union in out)))
 
-(defmethod execute :not [db relation [_ props child]]
-  (algebra/difference relation (algebra/join relation (execute db relation child))))
+(defmethod execute :not [db relation [_ {:keys [out]} child]]
+  (algebra/difference relation (execute db relation child)))
 
 (defmethod execute :search [db relation [_ {:keys [index in out]}]]
-  (algebra/join
-    relation
-    (if (algebra/intersects? (:attrs relation) (set (vals in)))
-      (let [rev-logic        (sets/map-invert in)
-            input-logic-vars (utils/logic-vars in)]
-        (reduce (fn [relation binding]
-                  (let [binding-vars (into {} (map (juxt (comp rev-logic key) val)) binding)]
-                    (algebra/union relation (index/execute-search db index (merge in binding-vars) out))))
-                (algebra/create-relation)
-                (:tuples (algebra/projection relation input-logic-vars))))
-      (index/execute-search db index in out))))
+  (if (algebra/intersects? (:attrs relation) (set (vals in)))
+    (let [rev-logic        (sets/map-invert in)
+          input-logic-vars (utils/logic-vars in)
+          bindings         (:tuples (algebra/projection relation input-logic-vars))]
+      (if (empty? bindings)
+        (algebra/empty relation)
+        (->> bindings
+             (map (fn [binding]
+                    (let [binding-vars (into {} (map (juxt (comp rev-logic key) val)) binding)]
+                      (index/execute-search db index (merge in binding-vars) out))))
+             (reduce algebra/union)
+             (algebra/join relation))))
+    (algebra/join relation (index/execute-search db index in out))))
 
 (defmethod execute :binding [_ relation [_ {:keys [in out fn args out-pattern]}]]
   (let [child {:attrs  (sets/union in out)
@@ -57,15 +60,22 @@
                               (merge output binding)))}]
     (algebra/join relation child)))
 
-(defmethod execute :predicate [db relation [_ {:keys [in out fn args]}]]
+(defmethod execute :predicate [db relation [_ {:keys [fn args]}]]
   (let [child {:attrs  (:attrs relation)
                :tuples (set (for [binding (:tuples relation)
                                   :when (apply (requiring-resolve fn) (map #(get binding % %) args))]
                               binding))}]
     (algebra/join relation child)))
 
-(defmethod execute :rule [db relation [_ {:keys [in out]} expression]]
-  )
+(def ^:dynamic *input-relations* #{})
+
+(defmethod execute :rule [db relation [_ {:keys [in out]} expression :as node]]
+  (if (contains? *input-relations* {:node node :relation relation})
+    relation
+    (binding [*input-relations* (conj *input-relations* {:node node :relation relation})]
+      (let [plan (plan/plan db in expression)
+            rel  (execute db relation plan)]
+        (algebra/join relation rel)))))
 
 (defmethod execute :optimize [db relation [_ plan]]
   (execute db relation (dyno/optimize* db relation plan)))

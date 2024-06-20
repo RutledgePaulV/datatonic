@@ -4,6 +4,7 @@
    Performance is left as an exercise for the optimizer."
   (:require [clojure.set :as sets]
             [clojure.string :as str]
+            [clojure.walk :as walk]
             [io.github.rutledgepaulv.datatonic.utils :as utils]
             [io.github.rutledgepaulv.datatonic.index :as index]))
 
@@ -85,7 +86,9 @@
 (defmethod plan :not [db bindings [_ child :as clause]]
   (let [child-plan             (plan db bindings child)
         child-input-logic-vars (into #{} (filter utils/logic-var?) (vals (:in (second child-plan))))]
-    [:not {:in (sets/intersection bindings child-input-logic-vars) :out #{}} child-plan]))
+    [:not {:in  (sets/intersection bindings child-input-logic-vars)
+           :out (sets/intersection bindings child-input-logic-vars)}
+     child-plan]))
 
 (defmethod plan :or-join [db bindings [_ binding-vector & children :as clause]]
   (let [{statement :statement outputs :bindings}
@@ -145,10 +148,13 @@
           rewritten
           (apply list 'or-join
                  (vec (rest (ffirst matching-rules)))
-                 (map (fn [rule] (apply list 'and-join (vec (rest (first rule))) (rest rule)))
-                      matching-rules))]
+                 (map (fn [rule] (apply list 'and-join (vec (rest (first rule))) (rest rule))) matching-rules))
+          replacements
+          (zipmap (rest (ffirst matching-rules)) (rest clause))
+          replaced
+          (walk/postwalk-replace replacements rewritten)]
       (binding [*rule-stack* (conj *rule-stack* [(first clause) (count clause)])]
-        (plan db bindings rewritten)))))
+        (plan db bindings replaced)))))
 
 (defn plan* [db clauses]
   (plan db #{} (if (list? clauses) clauses (cons 'and clauses))))

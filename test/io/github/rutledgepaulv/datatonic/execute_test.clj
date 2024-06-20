@@ -21,11 +21,18 @@
    [:a :v :e]
    [:v :a :e]])
 
+(def recommended-indices
+  [[:e :a :v]
+   [:a :e :v]
+   [:a :v :e]
+   [:v :a :e]
+   [:a]])
+
 (def all-indices (reduce index/add-datom (index/new-db) datoms))
 (def datomic-esq (reduce index/add-datom (index/new-db [:e :a :v] datomic-indices) datoms))
 (def datascript-esq (reduce index/add-datom (index/new-db [:e :a :v] datascript-indices) datoms))
-
-(def dbs [all-indices datomic-esq datascript-esq])
+(def recommended (reduce index/add-datom (index/new-db [:e :a :v] recommended-indices) datoms))
+(def dbs [all-indices datomic-esq datascript-esq recommended])
 
 (defn plan
   ([q]
@@ -102,6 +109,48 @@
       '{:attrs  #{?e ?even}
         :tuples #{{?even false ?e 1}
                   {?even true ?e 2}}}))
+
+  (testing "supports non-recursive rules"
+    (are [query rules expected]
+         (->> dbs
+              (map (fn [db] (assoc db :rules rules)))
+              (map (partial execute query))
+              (apply = expected))
+      '[(names ?name)]
+      '[[(names ?name)
+         [_ :person/name ?name]]
+        [(names ?name)
+         [?e :person/age ?age]
+         [?e :person/name ?name]]]
+      '{:attrs  #{?name}
+        :tuples #{{?name "Paul"}
+                  {?name "David"}}}))
+
+  (testing "supports recursive rules"
+    (let [db    (reduce index/add-datom (index/new-db)
+                        [[1 :person/father 2]
+                         [1 :person/name "Paul"]
+                         [2 :person/father 3]
+                         [2 :person/name "James"]
+                         [3 :person/name "Paul"]])
+          rules '[[(paternals ?child ?ancestor)
+                   [?child :person/father ?ancestor]]
+                  [(paternals ?child ?ancestor)
+                   [?child :person/father ?ancestor-1]
+                   (paternals ?ancestor-1 ?ancestor)]]
+          db'   (assoc db :rules rules)]
+      (is (= '{:attrs  #{?paternal ?p}
+               :tuples #{{?paternal 3, ?p 1} {?p 1, ?paternal 2}}}
+             (execute '[[?p :person/name "Paul"]
+                        (paternals ?p ?paternal)]
+                      db')))
+
+      (is (= '{:attrs  #{?paternal ?p}
+               :tuples #{{?p 1, ?paternal 2}}}
+             (execute '[[?p :person/name "Paul"]
+                        (paternals ?p ?paternal)
+                        [?paternal :person/name "James"]]
+                      db')))))
 
   (testing "supports all free variable matches"
     (are [query expected] (apply = expected (map (partial execute query) dbs))
