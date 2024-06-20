@@ -62,7 +62,7 @@
         (not [?e :person/name "Paul"])]
       '[:and {:in #{}, :out #{?a ?e}}
         [:search {:index :ave, :in {:a :person/age}, :out {:e ?e, :v ?a}}]
-        [:not {:in #{?e}, :out #{}}
+        [:not {:in #{?e}, :out #{?e}}
          [:search {:index :vea, :in {:a :person/name, :v "Paul", :e ?e}, :out {:e ?e}}]]]
 
       all-indices
@@ -71,9 +71,9 @@
         (not [?e :person/age 32])]
       '[:and {:in #{}, :out #{?a ?e}}
         [:search {:index :ave, :in {:a :person/age}, :out {:e ?e, :v ?a}}]
-        [:not {:in #{?e}, :out #{}}
+        [:not {:in #{?e}, :out #{?e}}
          [:search {:index :vea, :in {:a :person/name, :v "Paul", :e ?e}, :out {:e ?e}}]]
-        [:not {:in #{?e}, :out #{}}
+        [:not {:in #{?e}, :out #{?e}}
          [:search {:index :vea, :in {:a :person/age, :v 32, :e ?e}, :out {:e ?e}}]]]))
 
   (testing "Correctly unifies two clauses on entity"
