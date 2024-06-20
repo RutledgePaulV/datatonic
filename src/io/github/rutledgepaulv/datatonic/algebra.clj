@@ -86,13 +86,22 @@
               [rel1 rel2]
               [rel2 rel1])
             table
-            (into {} (keep (fn [x] (when-some [key (select-keys* x join-attrs)] [key x]))) (:tuples smaller))]
+            (reduce
+              (fn [agg x]
+                (if-some [key (select-keys* x join-attrs)]
+                  (update agg key (fnil conj #{}) x)
+                  agg))
+              {}
+              (:tuples smaller))]
         {:attrs  (sets/union (:attrs rel1) (:attrs rel2))
-         :tuples (into #{} (keep (fn [x]
-                                   (when-some [key (select-keys* x join-attrs)]
-                                     (when-some [match (get table key)]
-                                       (merge x match)))))
-                       (:tuples larger))}))))
+         :tuples (reduce
+                   (fn [agg x]
+                     (if-some [key (select-keys* x join-attrs)]
+                       (let [matches (get table key #{})]
+                         (into agg (map (partial merge x)) matches))
+                       agg))
+                   #{}
+                   (:tuples larger))}))))
 
 (defn intersection [rel1 rel2]
   (if (union-compatible? rel1 rel2)

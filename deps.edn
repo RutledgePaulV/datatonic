@@ -1,8 +1,6 @@
 {:paths ["src" "resources"]
  :deps  {persistent-sorted-set/persistent-sorted-set {:mvn/version "0.3.0"}
          org.clojure/math.combinatorics              {:mvn/version "0.3.0"}
-         io.github.rutledgepaulv/lattice             {:git/url "https://github.com/RutledgePaulV/lattice.git"
-                                                      :git/sha "c9b7037dab8e7ac2b898341c408755aa2b10dc6a"}
          com.google.guava/guava                      {:mvn/version "33.2.1-jre"}}
 
  :aliases

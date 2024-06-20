@@ -22,11 +22,10 @@
     (sets/union in out)))
 
 (defmethod execute :or [db relation [_ {:keys [in out]} & children]]
-  (algebra/projection
-    (->> children
-         (map (partial execute db relation))
-         (reduce algebra/union))
-    (sets/union in out)))
+  (->> children
+       (map (partial execute db relation))
+       (reduce algebra/union)
+       (algebra/join relation)))
 
 (defmethod execute :not [db relation [_ {:keys [out]} child]]
   (algebra/difference relation (execute db relation child)))
@@ -60,9 +59,9 @@
                               (merge output binding)))}]
     (algebra/join relation child)))
 
-(defmethod execute :predicate [db relation [_ {:keys [fn args]}]]
-  (let [child {:attrs  (:attrs relation)
-               :tuples (set (for [binding (:tuples relation)
+(defmethod execute :predicate [db relation [_ {:keys [in fn args]}]]
+  (let [child {:attrs  in
+               :tuples (set (for [binding (:tuples (algebra/projection relation in))
                                   :when (apply (requiring-resolve fn) (map #(get binding % %) args))]
                               binding))}]
     (algebra/join relation child)))
@@ -73,9 +72,8 @@
   (if (contains? *input-relations* {:node node :relation relation})
     relation
     (binding [*input-relations* (conj *input-relations* {:node node :relation relation})]
-      (let [plan (plan/plan db in expression)
-            rel  (execute db relation plan)]
-        (algebra/join relation rel)))))
+      (let [plan (plan/plan db in expression)]
+        (execute db relation plan)))))
 
 (defmethod execute :optimize [db relation [_ plan]]
   (execute db relation (dyno/optimize* db relation plan)))
