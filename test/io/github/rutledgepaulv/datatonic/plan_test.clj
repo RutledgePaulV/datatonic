@@ -33,6 +33,42 @@
 
 (deftest basic-searches
 
+  (testing "rules without recursion expand into a basic query AST"
+    (are [db rules query expected] (= expected (plan query (assoc db :rules rules)))
+      all-indices
+      '[[(names ?name)
+         [_ :person/name ?name]]
+        [(names ?name)
+         [?e :person/age ?age]
+         [?e :person/name ?name]]]
+      '[(names ?name)]
+      '[:and {:in #{}, :out #{?name}}
+        [:or {:in #{}, :out #{?name}}
+         [:and {:in #{}, :out #{?name}}
+          [:search {:index :av, :in {:a :person/name}, :out {:v ?name}}]]
+         [:and {:in #{}, :out #{?name}}
+          [:search {:index :ave, :in {:a :person/age}, :out {:e ?e, :v ?age}}]
+          [:search {:index :eav, :in {:a :person/name, :e ?e}, :out {:e ?e, :v ?name}}]]]]))
+
+  (testing "rules with recursion expand one level deep and record enough information to be expanded again"
+    (are [db rules query expected] (= expected (plan query (assoc db :rules rules)))
+      all-indices
+      '[[(paternals ?child ?ancestor)
+         [?child :person/father ?ancestor]]
+        [(paternals ?child ?ancestor)
+         [?child :person/father ?ancestor-1]
+         (paternals ?ancestor-1 ?ancestor)]]
+      '[[?p :person/name "Paul"]
+        (paternals ?p ?paternal)]
+      '[:and {:in #{}, :out #{?paternal ?p}}
+        [:search {:index :vae, :in {:a :person/name, :v "Paul"}, :out {:e ?p}}]
+        [:or {:in #{?p}, :out #{?paternal ?p}}
+         [:and {:in #{?p}, :out #{?paternal ?p}}
+          [:search {:index :eav, :in {:a :person/father, :e ?p}, :out {:e ?p, :v ?paternal}}]]
+         [:and {:in #{?p}, :out #{?paternal ?p}}
+          [:search {:index :eav, :in {:a :person/father, :e ?p}, :out {:e ?p, :v ?ancestor-1}}]
+          [:rule {:in #{?ancestor-1}, :out #{?ancestor-1 ?paternal}} (paternals ?ancestor-1 ?paternal)]]]]))
+
   (testing "predicates"
     (are [db query expected] (= expected (plan query db))
       all-indices
