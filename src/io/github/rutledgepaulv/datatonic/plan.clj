@@ -105,7 +105,7 @@
                 {:bindings  bindings
                  :statement []}
                 children)]
-    (into [:or {:in bindings :out (sets/intersection outputs (set binding-vector))}] statement)))
+    (into [:or {:in (sets/intersection bindings (set binding-vector)) :out (set binding-vector)}] statement)))
 
 (defmethod plan :and-join [db bindings [_ binding-vector & children :as clause]]
   (let [{statement :statement outputs :bindings}
@@ -122,12 +122,12 @@
                 {:bindings  bindings
                  :statement []}
                 children)]
-    (into [:and {:in bindings :out (sets/intersection outputs (set binding-vector))}] statement)))
+    (into [:and {:in (sets/intersection bindings (set binding-vector)) :out (set binding-vector)}] statement)))
 
 (defmethod plan :not-join [db bindings [_ binding-vector & children :as clause]]
-  (let [child-plan             (plan db (sets/intersection bindings (set binding-vector)) (cons 'and children))
-        child-input-logic-vars (into #{} (filter utils/logic-var?) (vals (:in (second child-plan))))]
-    [:not {:in (sets/intersection bindings (set binding-vector) child-input-logic-vars) :out #{}} child-plan]))
+  (let [child-plan (plan db (sets/intersection bindings (set binding-vector)) (cons 'and children))]
+    [:not {:in  (sets/intersection bindings (set binding-vector))
+           :out (set binding-vector)} child-plan]))
 
 (def ^:dynamic *rule-stack* #{})
 
@@ -158,18 +158,3 @@
 
 (defn plan* [db clauses]
   (plan db #{} (if (list? clauses) clauses (cons 'and clauses))))
-
-
-(comment
-
-  (def rules
-    '[[(ancestor ?c ?p)
-       [?p _ ?c]]
-      [(ancestor ?c ?p)
-       [?p1 _ ?c]
-       (ancestor ?p1 ?p)]])
-
-  (plan*
-    (assoc (index/new-db) :rules rules)
-    '(ancestor ?c ?p))
-  )
