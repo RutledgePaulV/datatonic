@@ -4,10 +4,6 @@
 
 (defn create-relation
   ([] (create-relation #{} #{}))
-  ([tuples]
-   (if (not-empty tuples)
-     (create-relation (set (keys (first tuples))) tuples)
-     (create-relation)))
   ([attrs tuples]
    {:attrs attrs :tuples tuples}))
 
@@ -57,7 +53,7 @@
     :else
     (let [attrs (sets/union (:attrs rel1) (:attrs rel2))]
       {:attrs  attrs
-       :tuples (into #{} (for [[x y] (** (remove empty? [(:tuples rel1) (:tuples rel2)]))]
+       :tuples (into #{} (for [[x y] (** [(:tuples rel1) (:tuples rel2)])]
                            (merge x y)))})))
 
 (defn union [rel1 rel2]

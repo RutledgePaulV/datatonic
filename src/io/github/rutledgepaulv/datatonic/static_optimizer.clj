@@ -21,6 +21,10 @@
   plan
   )
 
+; predicate INEQUALITIES can be converted into upper and lower boundaries on :search nodes
+
+; nodes with no dependencies between them can be executed concurrently
+
 (defn make-data-inaccessible
   "Make data inaccessible so nobody implements a dynamic optimization step
    as part of the static optimization phase. Instead, optimizers should

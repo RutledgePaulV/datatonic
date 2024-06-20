@@ -40,7 +40,7 @@
         [(even? ?e)]]
       '[:and {:in #{}, :out #{?e}}
         [:search {:index :e, :in {}, :out {:e ?e}}]
-        [:predicate {:in #{?e}, :args [?e], :fn clojure.core/even?, :out #{}}]]
+        [:predicate {:in #{?e}, :args [?e], :fn clojure.core/even?, :out #{?e}}]]
 
       all-indices
       '[[?e ?a ?v]
@@ -50,10 +50,10 @@
           [(odd? ?v)])]
       '[:and {:in #{}, :out #{?a ?v ?e}}
         [:search {:index :vea, :in {}, :out {:e ?e, :a ?a, :v ?v}}]
-        [:predicate {:in #{?e}, :args [?e], :fn clojure.core/even?, :out #{}}]
+        [:predicate {:in #{?e}, :args [?e], :fn clojure.core/even?, :out #{?e}}]
         [:and {:in #{?a ?v ?e}, :out #{?a ?v ?e}}
-         [:predicate {:in #{?v}, :args [?v], :fn clojure.core/number?, :out #{}}]
-         [:predicate {:in #{?v}, :args [?v], :fn clojure.core/odd?, :out #{}}]]]))
+         [:predicate {:in #{?v}, :args [?v], :fn clojure.core/number?, :out #{?v}}]
+         [:predicate {:in #{?v}, :args [?v], :fn clojure.core/odd?, :out #{?v}}]]]))
 
   (testing "not removes the elements which unify"
     (are [db query expected] (= expected (plan query db))

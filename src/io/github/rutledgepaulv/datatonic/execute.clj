@@ -66,14 +66,20 @@
                               binding))}]
     (algebra/join relation child)))
 
-(def ^:dynamic *input-relations* #{})
+(def ^:dynamic *breadcrumbs* #{})
 
 (defmethod execute :rule [db relation [_ {:keys [in out]} expression :as node]]
-  (if (contains? *input-relations* {:node node :relation relation})
-    relation
-    (binding [*input-relations* (conj *input-relations* {:node node :relation relation})]
-      (let [plan (plan/plan db in expression)]
-        (execute db relation plan)))))
+  ; detect when we've hit a fixed point meaning we recurred to the same rule
+  ; with an input relation which has already been seen. At that point we won't
+  ; learn anything new, so we return the input relation unmodified.
+  (let [breadcrumb {:node node :relation relation}]
+    (if (contains? *breadcrumbs* breadcrumb)
+      relation
+      ; otherwise, record the rule+relation that is being entered,
+      ; plan the rule one level deeper until the next recur target,
+      ; and execute the plan
+      (binding [*breadcrumbs* (conj *breadcrumbs* breadcrumb)]
+        (execute db relation (plan/plan db in expression))))))
 
 (defmethod execute :optimize [db relation [_ plan]]
   (execute db relation (dyno/optimize* db relation plan)))

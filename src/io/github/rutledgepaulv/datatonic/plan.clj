@@ -36,10 +36,10 @@
 
 (defmethod plan :predicate [db bindings clause]
   [:predicate
-   {:in   (sets/intersection bindings (utils/logic-vars (first clause)))
+   {:in   (utils/logic-vars (first clause))
     :args (vec (rest (first clause)))
     :fn   (utils/ensure-resolved (ffirst clause))
-    :out  #{}}])
+    :out  (utils/logic-vars (first clause))}])
 
 (defmethod plan :binding [db bindings clause]
   [:binding
@@ -129,32 +129,30 @@
     [:not {:in  (sets/intersection bindings (set binding-vector))
            :out (set binding-vector)} child-plan]))
 
-(def ^:dynamic *rule-stack* #{})
+(def ^:dynamic *breadcrumbs* #{})
 
-; expand rules but if we encounter a recursive invocation
-; then we just mark the point of recursion and will make
-; the executor handle the recursive execution
 (defmethod plan :rule [db bindings clause]
-  (if (contains? *rule-stack* [(first clause) (count clause)])
-    [:rule {:in  (sets/intersection bindings (utils/logic-vars clause))
-            :out (utils/logic-vars clause)}
-     clause]
-    (let [matching-rules
-          (filter
-            (fn [rule]
-              (and (= (ffirst rule) (first clause))
-                   (= (count (first rule)) (count clause))))
-            (get-in db [:rules]))
-          rewritten
-          (apply list 'or-join
-                 (vec (rest (ffirst matching-rules)))
-                 (map (fn [rule] (apply list 'and-join (vec (rest (first rule))) (rest rule))) matching-rules))
-          replacements
-          (zipmap (rest (ffirst matching-rules)) (rest clause))
-          replaced
-          (walk/postwalk-replace replacements rewritten)]
-      (binding [*rule-stack* (conj *rule-stack* [(first clause) (count clause)])]
-        (plan db bindings replaced)))))
+  (let [breadcrumb [(first clause) (count clause)]]
+    (if (contains? *breadcrumbs* breadcrumb)
+      [:rule {:in  (sets/intersection bindings (utils/logic-vars clause))
+              :out (utils/logic-vars clause)}
+       clause]
+      (let [matching-rules
+            (filter
+              (fn [rule]
+                (and (= (ffirst rule) (first clause))
+                     (= (count (first rule)) (count clause))))
+              (get-in db [:rules]))
+            rewritten
+            (apply list 'or-join
+                   (vec (rest (ffirst matching-rules)))
+                   (map (fn [rule] (apply list 'and-join (vec (rest (first rule))) (rest rule))) matching-rules))
+            replacements
+            (zipmap (rest (ffirst matching-rules)) (rest clause))
+            replaced
+            (walk/postwalk-replace replacements rewritten)]
+        (binding [*breadcrumbs* (conj *breadcrumbs* breadcrumb)]
+          (plan db bindings replaced))))))
 
 (defn plan* [db clauses]
   (plan db #{} (if (list? clauses) clauses (cons 'and clauses))))
