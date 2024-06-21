@@ -13,6 +13,10 @@
 
 (defmulti plan #'dispatch)
 
+; this only exists so that we can insert extra instrumentation
+; when computing a visual plan
+(def ^:dynamic *recur* plan)
+
 (defmethod plan :default [db bindings clause]
   (throw (ex-info "Unsupported query clause." {:clause clause})))
 
@@ -52,7 +56,7 @@
 (defmethod plan :and [db bindings [_ & children :as clause]]
   (let [{statement :statement outputs :bindings}
         (reduce (fn [agg clause]
-                  (let [[kind attrs :as statement] (plan db (:bindings agg) clause)]
+                  (let [[kind attrs :as statement] (*recur* db (:bindings agg) clause)]
                     (cond->
                       agg
                       (= :search kind)
@@ -69,7 +73,7 @@
 (defmethod plan :or [db bindings [_ & children :as clause]]
   (let [{statement :statement outputs :bindings}
         (reduce (fn [agg clause]
-                  (let [[kind attrs :as statement] (plan db bindings clause)]
+                  (let [[kind attrs :as statement] (*recur* db bindings clause)]
                     (cond->
                       agg
                       (= :search kind)
@@ -84,7 +88,7 @@
     (into [:or {:in bindings :out outputs}] statement)))
 
 (defmethod plan :not [db bindings [_ child :as clause]]
-  (let [child-plan             (plan db bindings child)
+  (let [child-plan             (*recur* db bindings child)
         child-input-logic-vars (into #{} (filter utils/logic-var?) (vals (:in (second child-plan))))]
     [:not {:in  (sets/intersection bindings child-input-logic-vars)
            :out (sets/intersection bindings child-input-logic-vars)}
@@ -93,7 +97,7 @@
 (defmethod plan :or-join [db bindings [_ binding-vector & children :as clause]]
   (let [{statement :statement outputs :bindings}
         (reduce (fn [agg clause]
-                  (let [[kind attrs :as statement] (plan db (sets/intersection bindings (set binding-vector)) clause)]
+                  (let [[kind attrs :as statement] (*recur* db (sets/intersection bindings (set binding-vector)) clause)]
                     (cond->
                       agg
                       (= :search kind)
@@ -110,7 +114,7 @@
 (defmethod plan :and-join [db bindings [_ binding-vector & children :as clause]]
   (let [{statement :statement outputs :bindings}
         (reduce (fn [agg clause]
-                  (let [[kind attrs :as statement] (plan db (:bindings agg) clause)]
+                  (let [[kind attrs :as statement] (*recur* db (:bindings agg) clause)]
                     (cond->
                       agg
                       (= :search kind)
@@ -125,7 +129,7 @@
     (into [:and {:in (sets/intersection bindings (set binding-vector)) :out (set binding-vector)}] statement)))
 
 (defmethod plan :not-join [db bindings [_ binding-vector & children :as clause]]
-  (let [child-plan (plan db (sets/intersection bindings (set binding-vector)) (cons 'and children))]
+  (let [child-plan (*recur* db (sets/intersection bindings (set binding-vector)) (cons 'and children))]
     [:not {:in  (sets/intersection bindings (set binding-vector))
            :out (set binding-vector)} child-plan]))
 
@@ -152,10 +156,10 @@
             replaced
             (walk/postwalk-replace replacements rewritten)]
         (binding [*breadcrumbs* (conj *breadcrumbs* breadcrumb)]
-          (plan db bindings replaced))))))
+          (*recur* db bindings replaced))))))
 
 (defn plan*
   ([db clauses]
    (plan* db clauses #{}))
   ([db clauses bindings]
-   (plan db bindings (if (list? clauses) clauses (cons 'and clauses)))))
+   (*recur* db bindings (if (list? clauses) clauses (cons 'and clauses)))))

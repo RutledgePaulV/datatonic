@@ -13,22 +13,26 @@
 
 (defmulti execute #'dispatch)
 
+; this only exists so that we can insert extra instrumentation
+; when computing execution statistics and/or a visual plan
+(def ^:dynamic *recur* execute)
+
 (defmethod execute :default [db relation node]
   (throw (ex-info "Unsupported execution node." {:node node})))
 
 (defmethod execute :and [db relation [_ {:keys [in out]} & children]]
   (algebra/projection
-    (reduce (partial execute db) relation children)
+    (reduce (partial *recur* db) relation children)
     (sets/union in out)))
 
 (defmethod execute :or [db relation [_ {:keys [in out]} & children]]
   (->> children
-       (map (partial execute db relation))
+       (map (partial *recur* db relation))
        (reduce algebra/union)
        (algebra/join relation)))
 
 (defmethod execute :not [db relation [_ {:keys [out]} child]]
-  (algebra/difference relation (execute db relation child)))
+  (algebra/difference relation (*recur* db relation child)))
 
 (defmethod execute :search [db relation [_ {:keys [index in out]}]]
   (if (algebra/intersects? (:attrs relation) (set (vals in)))
@@ -79,13 +83,13 @@
       ; plan the rule one level deeper until the next recur target,
       ; and execute the plan
       (binding [*breadcrumbs* (conj *breadcrumbs* breadcrumb)]
-        (execute db relation (plan/plan db in expression))))))
+        (*recur* db relation (plan/plan db in expression))))))
 
 (defmethod execute :optimize [db relation [_ plan]]
-  (execute db relation (dyno/optimize* db relation plan)))
+  (*recur* db relation (dyno/optimize* db relation plan)))
 
 (defn execute*
   ([db plan]
    (execute* db plan (algebra/create-relation)))
   ([db plan relation]
-   (execute db relation plan)))
+   (*recur* db relation plan)))

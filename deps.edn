@@ -1,6 +1,8 @@
 {:paths ["src" "resources"]
  :deps  {persistent-sorted-set/persistent-sorted-set {:mvn/version "0.3.0"}
-         org.clojure/math.combinatorics              {:mvn/version "0.3.0"}}
+         org.clojure/math.combinatorics              {:mvn/version "0.3.0"}
+         rhizome/rhizome                             {:mvn/version "0.2.9"}
+         hiccup/hiccup                               {:mvn/version "2.0.0-RC3"}}
 
  :aliases
  {:test      {:extra-paths ["test"]}

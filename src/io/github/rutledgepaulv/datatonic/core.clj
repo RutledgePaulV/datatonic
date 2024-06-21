@@ -30,7 +30,3 @@
         query-result     (execute/execute* db query-plan initial-relation)
         aggregation      (aggregate/aggregate* find with query-result)]
     aggregation))
-
-(defn plan [query db]
-  (let [{:keys [find in with where]} (parse-query query)]
-    (plan/plan* db where (utils/logic-vars in))))
