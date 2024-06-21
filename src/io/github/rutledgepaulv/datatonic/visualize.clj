@@ -33,20 +33,21 @@
   ([relation]
    (render-table relation 5))
   ([relation max-size]
-   (graphviz-html
-     (h/html
-       (let [headers (sort (:attrs relation))]
-         [:table
-          [:tr (for [header (cons "#" headers)] [:td header])]
-          (for [[idx row] (map vector (range) (take max-size (:tuples relation)))]
-            [:tr (cons
-                   [:td idx]
-                   (for [head headers]
-                     [:td (pr-str (get row head))]))])
-          (when (< max-size (count (:tuples relation)))
-            [:tr (cons
-                   [:td (str (dec max-size) "-" (dec (count (:tuples relation))))]
-                   (for [_ headers] [:td "..."]))])])))))
+   (when-not (empty? (:attrs relation))
+     (graphviz-html
+       (h/html
+         (let [headers (sort (:attrs relation))]
+           [:table
+            [:tr (for [header (cons "#" headers)] [:td header])]
+            (for [[idx row] (map vector (range) (take max-size (:tuples relation)))]
+              [:tr (cons
+                     [:td idx]
+                     (for [head headers]
+                       [:td (pr-str (get row head))]))])
+            (when (< max-size (count (:tuples relation)))
+              [:tr (cons
+                     [:td (str (dec max-size) "-" (dec (count (:tuples relation))))]
+                     (for [_ headers] [:td "..."]))])]))))))
 
 (defn visual [log]
   (let [nodes
@@ -65,14 +66,12 @@
                   :edge {:fontname ""}}
         :vertical? true
         :node->descriptor (fn [node] {:shape    "box"
-                                      :fontname "d"
                                       :label    (pr-str (:raw (meta node)))})
         :edge->descriptor (fn [source target]
                             (reduce
                               (fn [nf it]
                                 (if (and (= (:node it) target) (= (:predecessor it) source))
-                                  (reduced {:fontname "d"
-                                            :label    (render-table (:relation it))})
+                                  (reduced {:label    (render-table (:relation it))})
                                   nf))
                               nil
                               log)))
@@ -92,9 +91,11 @@
           aggregation      (aggregate/aggregate* find with query-result)]
       (visual
         (cons
-          {:node (with-meta {:begin true} {:raw "QUERY"}) :relation initial-relation}
-          (update (deref *log*) 0
-                  (fn [x] (assoc x :predecessor {:begin true}))))))))
+          {:node (with-meta {:begin true} {:raw 'query}) :relation initial-relation}
+          (-> (update (deref *log*) 0 (fn [x] (assoc x :predecessor {:begin true})))
+              (conj {:node        (with-meta {:begin true} {:raw 'query})
+                     :predecessor (:node (peek (deref *log*)))
+                     :relation    (:relation (peek (deref *log*)))})))))))
 
 (defn visualize* [db query & args]
   (let [dot  (apply dot* db query args)
@@ -119,7 +120,6 @@
       :where
       [?e ?a ?v]
       [(even? ?e)]
-      [(number? ?v)]
-      [(odd? ?v)]])
+      [(number? ?v) ?num]])
 
   )
