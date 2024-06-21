@@ -7,6 +7,11 @@
 (defn wildcard? [x]
   (= '_ x))
 
+(defn splat? [x]
+  (and (vector? x)
+       (= 2 (count x))
+       (= '... (second x))))
+
 (defn constant? [x]
   (and (not (wildcard? x)) (not (logic-var? x))))
 
@@ -35,6 +40,18 @@
 (defn ensure-resolved [symbol]
   (if (qualified-symbol? symbol) symbol
     (.toSymbol (ns-resolve (the-ns 'clojure.core) symbol))))
+
+(defn destruct
+  "Given a binding target and a value return a set of maps."
+  [binding value]
+  (if (splat? binding)
+    (->> (for [v value] (destruct (first binding) v))
+         (mapcat identity)
+         (into #{}))
+    (let [logic-vars (logic-vars binding)]
+      (-> (eval `(let [~binding ~value] ~(into {} (mapv (fn [k] [(keyword k) k]) logic-vars))))
+          (update-keys symbol)
+          (hash-set)))))
 
 (defn classify-clause [clause]
   (cond

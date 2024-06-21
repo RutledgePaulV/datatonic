@@ -17,23 +17,9 @@
                                          (conj (peek (peek parts)) form)))))
              [] query)))
 
-(defn splat? [x]
-  (and (vector? x)
-       (= 2 (count x))
-       (= '... (second x))))
-
-(defn destruct [binding value]
-  (if (splat? binding)
-    (->> (for [v value] (destruct (first binding) v))
-         (mapcat identity))
-    (let [logic-vars (utils/logic-vars binding)]
-      (-> (eval `(let [~binding ~value] ~(into {} (mapv (fn [k] [(keyword k) k]) logic-vars))))
-          (update-keys symbol)
-          (list)))))
-
 (defn create-relation [templates values]
   {:attrs  (utils/logic-vars templates)
-   :tuples (->> (algebra/** (map destruct templates values))
+   :tuples (->> (algebra/** (map utils/destruct templates values))
                 (remove empty?)
                 (map (fn [xs] (apply merge xs))))})
 
