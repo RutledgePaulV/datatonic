@@ -156,6 +156,6 @@
 
 (defn plan*
   ([db clauses]
-   (plan db clauses #{}))
+   (plan* db clauses #{}))
   ([db clauses bindings]
    (plan db bindings (if (list? clauses) clauses (cons 'and clauses)))))
