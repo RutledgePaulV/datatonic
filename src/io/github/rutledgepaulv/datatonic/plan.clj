@@ -154,5 +154,8 @@
         (binding [*breadcrumbs* (conj *breadcrumbs* breadcrumb)]
           (plan db bindings replaced))))))
 
-(defn plan* [db clauses]
-  (plan db #{} (if (list? clauses) clauses (cons 'and clauses))))
+(defn plan*
+  ([db clauses]
+   (plan db clauses #{}))
+  ([db clauses bindings]
+   (plan db bindings (if (list? clauses) clauses (cons 'and clauses)))))

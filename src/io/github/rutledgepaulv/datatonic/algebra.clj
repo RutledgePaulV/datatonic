@@ -10,7 +10,7 @@
 (defn empty [rel]
   {:attrs (:attrs rel) :tuples #{}})
 
-(defn- **
+(defn **
   ([cols] (** '([]) cols))
   ([samples cols]
    (if (empty? cols)

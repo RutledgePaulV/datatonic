@@ -3,4 +3,4 @@
 
 
 (defn aggregate* [find-args with-args relation]
-  )
+  relation)

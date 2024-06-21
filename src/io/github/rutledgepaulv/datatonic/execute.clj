@@ -84,5 +84,8 @@
 (defmethod execute :optimize [db relation [_ plan]]
   (execute db relation (dyno/optimize* db relation plan)))
 
-(defn execute* [db plan]
-  (execute db (algebra/create-relation) plan))
+(defn execute*
+  ([db plan]
+   (execute* db plan (algebra/create-relation)))
+  ([db plan relation]
+   (execute db relation plan)))
