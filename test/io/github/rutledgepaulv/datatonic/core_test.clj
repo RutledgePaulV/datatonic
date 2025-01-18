@@ -31,4 +31,25 @@
              [?e :person/age ?age]
              [?e :person/name ?name]]
            db
-           35))))
+           35)))
+  (let [db (reduce index/add-datom
+                   (index/new-db)
+                   [[1 :some/flag false]
+                    [1 :some/items "item1"]
+                    [1 :some/items "item2"]])]
+    (is (empty?
+          (:tuples (d/q
+                     '[:find ?x
+                       :in $
+                       :where
+                       [_ :some/items ?x]
+                       [_ :some/flag true]]
+                     db))))
+    (is (empty?
+          (:tuples (d/q
+                     '[:find ?x
+                       :in $
+                       :where
+                       [_ :some/flag true]
+                       [_ :some/items ?x]]
+                     db))))))

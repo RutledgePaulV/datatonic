@@ -17,7 +17,13 @@
   (throw (ex-info "Unsupported query clause." {:clause clause})))
 
 (defmethod plan :pattern [db bindings clause]
-  (let [clause-as-map    (zipmap (:components db) clause)
+  (let [clause-as-map    (reduce
+                           (fn [agg [component v]]
+                             (if (utils/wildcard? v)
+                               (assoc agg component (gensym "?_"))
+                               (assoc agg component v)))
+                           {}
+                           (map vector (:components db) clause))
         logic-bindings   (index/get-logic-vars clause-as-map)
         reversed         (sets/map-invert logic-bindings)
         const-bindings   (index/get-constants clause-as-map)
